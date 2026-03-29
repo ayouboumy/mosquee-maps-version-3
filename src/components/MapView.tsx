@@ -230,7 +230,7 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
 }
 
 export default function MapView({ showNearest }: { showNearest?: boolean }) {
-  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme } = useAppStore();
+  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle } = useAppStore();
   
   const mapRef = useRef<any>(null);
   const [roadDurations, setRoadDurations] = useState<Record<number, number>>({});
@@ -256,10 +256,15 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
     return mapTheme;
   }, [mapTheme]);
 
+  const currentMapStyle = useMemo(() => {
+    if (mapStyle === 'satellite') return 'mapbox://styles/mapbox/satellite-streets-v12';
+    return 'mapbox://styles/mapbox/standard';
+  }, [mapStyle]);
+
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current.getMap();
-    if (!map) return;
+    if (!map || mapStyle === 'satellite') return;
 
     const updateConfig = () => {
       try {
@@ -416,16 +421,24 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
         ref={mapRef}
-        mapStyle="mapbox://styles/mapbox/standard"
+        mapStyle={currentMapStyle}
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
         terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
         projection={{ name: 'globe' }}
       >
-        <NavigationControl position="top-right" visualizePitch={true} />
-        <GeolocateControl position="bottom-right" trackUserLocation={true} showUserHeading={true} />
-        <FullscreenControl position="top-left" />
-        <ScaleControl position="bottom-left" />
+        {/* Custom High-End Control Stack */}
+        <div className="absolute top-24 right-4 z-[9999] flex flex-col gap-3">
+          <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/50 p-1 flex flex-col gap-1 ring-1 ring-black/5">
+            <NavigationControl showCompass={true} showZoom={true} visualizePitch={true} style={{ position: 'relative', margin: 0, boxShadow: 'none', border: 'none' }} />
+          </div>
+          <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/50 p-1 flex flex-col gap-1 ring-1 ring-black/5">
+             <GeolocateControl trackUserLocation={true} showUserHeading={true} style={{ position: 'relative', margin: 0, boxShadow: 'none', border: 'none' }} />
+          </div>
+          <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/50 p-1 flex flex-col gap-1 ring-1 ring-black/5">
+             <FullscreenControl style={{ position: 'relative', margin: 0, boxShadow: 'none', border: 'none' }} />
+          </div>
+        </div>
         <Source
           id="mapbox-dem"
           type="raster-dem"

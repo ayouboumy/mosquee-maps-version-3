@@ -59,7 +59,7 @@ export const useAppStore = create<AppState>()(
       dynamicTranslations: {},
       selectedCommune: null,
       mapStyle: 'street',
-      mapTheme: 'auto',
+      mapTheme: 'dark', // Default to Dark as requested
 
       toggleFavorite: (id) =>
         set((state) => ({
