@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, memo, useCallback, useRef } from 'react';
-import { Map, Marker, Source, Layer, useMap, NavigationControl, FullscreenControl, GeolocateControl } from 'react-map-gl/mapbox';
+import { Map, Marker, Source, Layer, useMap, NavigationControl, FullscreenControl, GeolocateControl, ScaleControl } from 'react-map-gl/mapbox';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import useSupercluster from 'use-supercluster';
@@ -265,11 +265,9 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
       try {
         if (map.getImport('basemap')) {
           map.setConfigProperty('basemap', 'theme', currentTheme);
-          // Set lightPreset for richer dark/light experience
           const preset = currentTheme === 'dark' ? 'night' : 'day';
           map.setConfigProperty('basemap', 'lightPreset', preset);
           
-          // Add 3D Fog/Atmosphere for "Expert" premium feel
           map.setFog({
             'range': [0.5, 10],
             'color': currentTheme === 'dark' ? '#242b3b' : '#ffffff',
@@ -279,7 +277,7 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
           });
         }
       } catch (e) {
-        console.warn("Could not set map config:", e);
+        console.warn("Standard map error, fallback to legacy theme:", e);
       }
     };
 
@@ -322,11 +320,12 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         const batch2 = candidates.slice(25, 50);
         
         const fetchBatch = async (batch: typeof candidates) => {
-          if (batch.length === 0) return [];
-          const coordinates = [
+          if (!batch || batch.length === 0) return { code: 'Empty' };
+          const coordsArr = [
             `${userLocation.longitude},${userLocation.latitude}`,
             ...batch.map(c => `${c.longitude},${c.latitude}`)
-          ].join(';');
+          ];
+          const coordinates = coordsArr.join(';');
           const url = `https://api.mapbox.com/directions-matrix/v1/mapbox/${profile}/${coordinates}?annotations=duration,distance&access_token=${MAPBOX_TOKEN}`;
           const res = await fetch(url);
           return await res.json();
@@ -338,7 +337,7 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         const distancesMap: Record<number, number> = {};
 
         const processData = (data: any, batch: typeof candidates) => {
-          if (data.code === 'Ok' && data.durations && data.distances) {
+          if (data && data.code === 'Ok' && data.durations && data.distances) {
             data.durations[0].forEach((dur: number, idx: number) => {
               if (idx > 0 && dur !== null) {
                 const mosqueId = batch[idx - 1].id;
@@ -408,11 +407,10 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
         projection={{ name: 'globe' }}
       >
-        <div className="absolute top-4 right-4 z-[9999] flex flex-col gap-2">
-           <NavigationControl position="top-right" />
-           <GeolocateControl position="top-right" trackUserLocation={true} showUserHeading={true} />
-           <FullscreenControl position="top-right" />
-        </div>
+        <NavigationControl position="top-right" />
+        <GeolocateControl position="top-right" trackUserLocation={true} showUserHeading={true} />
+        <FullscreenControl position="top-left" />
+        <ScaleControl position="bottom-left" />
         <Source
           id="mapbox-dem"
           type="raster-dem"
