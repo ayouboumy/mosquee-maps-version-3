@@ -10,7 +10,7 @@ import { useAppStore } from '../store/useAppStore';
 import { cn } from '../lib/utils';
 import { t, getLocalizedName } from '../utils/translations';
 import { useState, useMemo } from 'react';
-import Map, { Marker } from 'react-map-gl';
+import Map, { Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;

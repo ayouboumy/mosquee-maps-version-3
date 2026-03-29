@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, memo, useCallback, useRef } from 'react';
-import Map, { Marker, Source, Layer, useMap } from 'react-map-gl';
+import Map, { Marker, Source, Layer, useMap } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import useSupercluster from 'use-supercluster';
 import { motion, AnimatePresence } from 'motion/react';
