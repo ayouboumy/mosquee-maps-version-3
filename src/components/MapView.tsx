@@ -4,7 +4,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import useSupercluster from 'use-supercluster';
 import { motion, AnimatePresence } from 'motion/react';
-import { Navigation, Clock } from 'lucide-react';
+import { Navigation, Clock, Plus, Minus, Target, Maximize, Map as MapIcon } from 'lucide-react';
 import { useAppStore, RouteProfile } from '../store/useAppStore';
 import { getDistance } from 'geolib';
 import { getLocalizedName, t } from '../utils/translations';
@@ -258,47 +258,27 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
 
   const currentMapStyle = useMemo(() => {
     if (mapStyle === 'satellite') return 'mapbox://styles/mapbox/satellite-streets-v12';
-    return 'mapbox://styles/mapbox/standard';
-  }, [mapStyle]);
+    if (currentTheme === 'dark') return 'mapbox://styles/mapbox/dark-v11';
+    return 'mapbox://styles/mapbox/streets-v12';
+  }, [mapStyle, currentTheme]);
 
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current.getMap();
-    if (!map || mapStyle === 'satellite') return;
+  const handleZoom = (delta: number) => {
+    mapRef.current?.zoomTo(mapRef.current.getZoom() + delta, { duration: 300 });
+  };
 
-    const updateConfig = () => {
-      try {
-        if (map.getImport('basemap')) {
-          map.setConfigProperty('basemap', 'theme', currentTheme);
-          const preset = currentTheme === 'dark' ? 'night' : 'day';
-          map.setConfigProperty('basemap', 'lightPreset', preset);
-          
-          map.setFog({
-            'range': [0.5, 10],
-            'color': currentTheme === 'dark' ? '#242b3b' : '#ffffff',
-            'high-color': currentTheme === 'dark' ? '#161c24' : '#add8e6',
-            'space-color': currentTheme === 'dark' ? '#0b1015' : '#d8f2ff',
-            'horizon-blend': 0.02
-          });
-        }
-      } catch (e) {
-        console.warn("Standard map error:", e);
-      }
-    };
-
-    // Use specific 'style.import.load' for Mapbox Standard imports
-    map.on('style.import.load', (e) => {
-      if (e.importId === 'basemap') {
-        updateConfig();
-      }
-    });
-
-    if (map.isStyleLoaded()) {
-      updateConfig();
-    } else {
-      map.on('style.load', updateConfig);
+  const handleGeolocate = () => {
+    if (isUserLocationValid) {
+      mapRef.current?.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: 15, duration: 1000 });
     }
-  }, [currentTheme]);
+  };
+
+  const handleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  };
 
   const filteredByCommune = useMemo(() => {
     return mosques.filter(m => 
@@ -425,19 +405,40 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
         terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
-        projection={{ name: 'globe' }}
       >
-        {/* Custom High-End Control Stack */}
-        <div className="absolute top-24 right-4 z-[9999] flex flex-col gap-3">
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/50 p-1 flex flex-col gap-1 ring-1 ring-black/5">
-            <NavigationControl showCompass={true} showZoom={true} visualizePitch={true} style={{ position: 'relative', margin: 0, boxShadow: 'none', border: 'none' }} />
-          </div>
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/50 p-1 flex flex-col gap-1 ring-1 ring-black/5">
-             <GeolocateControl trackUserLocation={true} showUserHeading={true} style={{ position: 'relative', margin: 0, boxShadow: 'none', border: 'none' }} />
-          </div>
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/50 p-1 flex flex-col gap-1 ring-1 ring-black/5">
-             <FullscreenControl style={{ position: 'relative', margin: 0, boxShadow: 'none', border: 'none' }} />
-          </div>
+        {/* The Absolute Fix: Custom High-End Control Stack (ZERO OVERLAP) */}
+        <div className="absolute top-24 right-4 z-[9999] flex flex-col gap-4">
+           {/* Zoom Group */}
+           <div className="flex flex-col bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 overflow-hidden ring-1 ring-black/5">
+              <button 
+                onClick={() => handleZoom(1)}
+                className="p-3 hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100 transition-colors text-gray-700"
+              >
+                <Plus size={20} strokeWidth={3} />
+              </button>
+              <button 
+                onClick={() => handleZoom(-1)}
+                className="p-3 hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700"
+              >
+                <Minus size={20} strokeWidth={3} />
+              </button>
+           </div>
+
+           {/* Location Group */}
+           <button 
+             onClick={handleGeolocate}
+             className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 hover:bg-gray-50 active:bg-gray-100 transition-colors text-blue-600 ring-1 ring-black/5"
+           >
+             <Target size={20} />
+           </button>
+
+           {/* Fullscreen Group */}
+           <button 
+             onClick={handleFullscreen}
+             className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700 ring-1 ring-black/5"
+           >
+             <Maximize size={20} />
+           </button>
         </div>
         <Source
           id="mapbox-dem"

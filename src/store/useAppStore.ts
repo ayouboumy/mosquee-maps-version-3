@@ -59,7 +59,7 @@ export const useAppStore = create<AppState>()(
       dynamicTranslations: {},
       selectedCommune: null,
       mapStyle: 'street',
-      mapTheme: 'dark', // Default to Dark as requested
+      mapTheme: 'dark', // Hard-coded default for Dark Mode
 
       toggleFavorite: (id) =>
         set((state) => ({
@@ -105,7 +105,7 @@ export const useAppStore = create<AppState>()(
       }),
     }),
     {
-      name: 'mosque-finder-storage',
+      name: 'mosque-finder-v9-absolute', // Changed key to force reset
       partialize: (state) => ({ 
         favorites: state.favorites, 
         mosques: state.mosques, 
