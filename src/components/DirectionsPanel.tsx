@@ -189,21 +189,21 @@ export default function DirectionsPanel() {
                       onClick={() => setIsNavigating(true)}
                       disabled={!routeInfo}
                       className={cn(
-                        "flex items-center justify-center gap-2 text-white h-[50px] px-8 rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95 shadow-lg",
+                        "flex items-center justify-center gap-2 text-white h-[60px] px-8 rounded-full font-black text-lg uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-blue-500/20",
                         !routeInfo
                           ? "bg-gray-300 shadow-none pointer-events-none opacity-50"
                           : routeProfile === 'driving'
-                            ? "bg-blue-600 hover:bg-blue-700 shadow-blue-600/30 ring-4 ring-blue-600/10"
-                            : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30 ring-4 ring-emerald-600/10"
+                            ? "bg-blue-600 hover:bg-blue-700 ring-4 ring-blue-600/10"
+                            : "bg-emerald-600 hover:bg-emerald-700 ring-4 ring-emerald-600/10"
                       )}
                     >
-                      <Navigation size={18} className="fill-current" />
-                      {t('Start 3D Nav', language)}
+                      <Navigation size={22} className="fill-current" />
+                      {t('Start Live Nav', language)}
                     </button>
                     <button
                       onClick={handleOpenMaps}
                       disabled={!routeInfo}
-                      className="text-[10px] font-black uppercase text-gray-400 hover:text-gray-600 transition-colors text-center"
+                      className="text-[10px] font-black uppercase text-gray-400 hover:text-gray-600 transition-colors text-center py-1"
                     >
                       {t('Open in External Maps', language)}
                     </button>

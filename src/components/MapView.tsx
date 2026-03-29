@@ -515,15 +515,26 @@ export default function MapView({
         )}
 
         {/* 3. TOP-RIGHT: Navigation Hub (Zoom & Compass) */}
-        {!isNavigating && !routingToMosque && (
+        {!isNavigating && (
           <div className={`absolute top-24 ${language === 'ar' ? 'left-4' : 'right-4'} z-[9999] flex flex-col gap-2`}>
              <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-1 flex flex-col gap-1 ring-1 ring-black/5">
                 <button onClick={() => handleZoom(1)} className="p-3 hover:bg-gray-100 rounded-xl transition-colors"><Plus size={20} strokeWidth={3} /></button>
                 <div className="h-px bg-gray-100 mx-2" />
                 <button onClick={() => handleZoom(-1)} className="p-3 hover:bg-gray-100 rounded-xl transition-colors"><Minus size={20} strokeWidth={3} /></button>
              </div>
+             
+             {/* Functional Reset North */}
              <button onClick={() => mapRef.current?.easeTo({ bearing: 0, duration: 800 })} className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 text-emerald-600 ring-1 ring-black/5">
                 <Compass size={20} />
+             </button>
+
+             {/* Functional Near Mosque Toggle (RESTORED) */}
+             <button 
+               onClick={() => setShowNearest?.(!showNearest)}
+               className={`p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 ring-1 ring-black/5 transition-colors ${showNearest ? 'bg-amber-500 text-white border-amber-500' : 'text-amber-600'}`}
+               title={t("Nearest Mosques", language)}
+             >
+                <MapPin size={20} />
              </button>
           </div>
         )}
