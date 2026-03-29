@@ -1,0 +1,121 @@
+import { useEffect, useState } from 'react';
+import { useAppStore } from './store/useAppStore';
+import BottomNav from './components/BottomNav';
+import BottomSheet from './components/BottomSheet';
+import SearchScreen from './screens/SearchScreen';
+import FavoritesScreen from './screens/FavoritesScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import { LocateFixed, MapPin, Layers } from 'lucide-react';
+import MapView from './components/MapView';
+import { t } from './utils/translations';
+import DirectionsPanel from './components/DirectionsPanel';
+import PullToRefresh from './components/PullToRefresh';
+
+export default function App() {
+  const { activeTab, setUserLocation, language, routingToMosque, refreshLocation, mosques, mapStyle, setMapStyle } = useAppStore();
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [showNearest, setShowNearest] = useState(false);
+
+  const requestLocation = () => {
+    setIsLocating(true);
+    setLocationError(null);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+          setIsLocating(false);
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          setLocationError(t("Location access denied or unavailable.", language));
+          setIsLocating(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      setLocationError(t("Geolocation is not supported by your browser.", language));
+      setIsLocating(false);
+    }
+  };
+
+  useEffect(() => {
+    requestLocation();
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 bg-gray-100 overflow-hidden font-sans text-gray-900 flex justify-center"
+      dir={language === 'ar' ? 'rtl' : 'ltr'}
+    >
+      {/* Mobile container constraint for desktop viewing */}
+      <div className="w-full max-w-md h-full bg-white relative shadow-2xl overflow-hidden flex flex-col">
+
+        {/* Main Content Area */}
+        <div className="flex-1 relative overflow-hidden">
+          {activeTab === 'map' && (
+            <PullToRefresh onRefresh={refreshLocation}>
+              <MapView showNearest={showNearest} />
+
+              {/* Floating Controls */}
+              {!routingToMosque && (
+                <div className={`absolute top-safe-4 ${language === 'ar' ? 'left-4' : 'right-4'} z-[1000] flex flex-col gap-3 animate-fade-up`}>
+                  <div className="glass rounded-full flex flex-col overflow-hidden shadow-card hover:shadow-card-hover transition-shadow text-gray-700 bg-white/70">
+                    <button
+                      onClick={requestLocation}
+                      className="p-3.5 bg-transparent hover:bg-white/40 transition-all duration-300 relative group"
+                      title={t("My Location", language)}
+                    >
+                      {isLocating && <div className="absolute inset-2 rounded-full border-2 border-blue-400 animate-ping opacity-75" />}
+                      <LocateFixed size={22} className={`group-hover:text-blue-600 group-active:scale-95 transition-transform ${isLocating ? "text-blue-600" : ""}`} />
+                    </button>
+
+                    <div className="h-[1px] w-8 bg-gray-300/50 mx-auto" />
+
+                    <button
+                      onClick={() => setShowNearest(!showNearest)}
+                      className={`p-3.5 transition-all duration-300 group ${showNearest ? 'bg-blue-500/90 text-white' : 'bg-transparent hover:bg-white/40 text-gray-700'}`}
+                      title={t("Nearest Mosques", language)}
+                    >
+                      <MapPin size={22} className={`group-active:scale-95 transition-transform ${showNearest ? "text-white" : "group-hover:text-blue-600"}`} />
+                    </button>
+
+                    <div className="h-[1px] w-8 bg-gray-300/50 mx-auto" />
+
+                    <button
+                      onClick={() => setMapStyle(mapStyle === 'street' ? 'satellite' : 'street')}
+                      className={`p-3.5 transition-all duration-300 group ${mapStyle === 'satellite' ? 'bg-emerald-500/90 text-white' : 'bg-transparent hover:bg-white/40 text-gray-700'}`}
+                      title={t(mapStyle === 'street' ? 'Satellite Mode' : 'Street Mode', language)}
+                    >
+                      <Layers size={22} className={`group-active:scale-95 transition-transform ${mapStyle === 'satellite' ? "text-white" : "group-hover:text-emerald-600"}`} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {locationError && (
+                <div className="absolute top-safe-20 left-4 right-4 z-[1000] p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl shadow-sm">
+                  {locationError}
+                </div>
+              )}
+
+              <BottomSheet />
+              <DirectionsPanel />
+            </PullToRefresh>
+          )}
+
+          {activeTab === 'search' && <SearchScreen />}
+
+          {activeTab === 'favorites' && <FavoritesScreen />}
+
+          {activeTab === 'settings' && <SettingsScreen />}
+        </div>
+
+        {!routingToMosque && <BottomNav />}
+      </div>
+    </div>
+  );
+}

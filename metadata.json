@@ -1,0 +1,5 @@
+{
+  "name": "Mosque Finder",
+  "description": "Offline-first map-based application to find mosques, view services, and save favorites.",
+  "requestFramePermissions": ["geolocation"]
+}
