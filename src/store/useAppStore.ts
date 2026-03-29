@@ -23,6 +23,9 @@ interface AppState {
   routeProfile: RouteProfile;
   userLocation: { latitude: number; longitude: number } | null;
   isNavigating: boolean;
+  navSteps: any[];
+  currentStepIndex: number;
+  lastSpokenStepIndex: number;
   language: Language;
   dynamicTranslations: Record<string, Record<Language, string>>;
   selectedCommune: string | null;
@@ -43,6 +46,9 @@ interface AppState {
   setMapStyle: (style: MapStyle) => void;
   setMapTheme: (theme: MapTheme) => void;
   setIsNavigating: (val: boolean) => void;
+  setNavSteps: (steps: any[]) => void;
+  setCurrentStepIndex: (idx: number) => void;
+  setLastSpokenStepIndex: (idx: number) => void;
   refreshLocation: () => Promise<void>;
 }
 
@@ -58,6 +64,9 @@ export const useAppStore = create<AppState>()(
       routeProfile: 'foot',
       userLocation: null,
       isNavigating: false,
+      navSteps: [],
+      currentStepIndex: 0,
+      lastSpokenStepIndex: -1,
       language: 'ar', // Default to Arabic
       dynamicTranslations: {},
       selectedCommune: null,
@@ -84,7 +93,10 @@ export const useAppStore = create<AppState>()(
       setSelectedCommune: (commune) => set({ selectedCommune: commune }),
       setMapStyle: (style) => set({ mapStyle: style }),
       setMapTheme: (theme: MapTheme) => set({ mapTheme: theme }),
-      setIsNavigating: (val) => set({ isNavigating: val }),
+      setIsNavigating: (val) => set({ isNavigating: val, currentStepIndex: 0, lastSpokenStepIndex: -1 }),
+      setNavSteps: (steps) => set({ navSteps: steps }),
+      setCurrentStepIndex: (idx) => set({ currentStepIndex: idx }),
+      setLastSpokenStepIndex: (idx) => set({ lastSpokenStepIndex: idx }),
       refreshLocation: () => new Promise((resolve) => {
         if ('geolocation' in navigator) {
           navigator.geolocation.getCurrentPosition(

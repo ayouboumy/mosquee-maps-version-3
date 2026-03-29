@@ -5,7 +5,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import useSupercluster from 'use-supercluster';
 import { motion, AnimatePresence } from 'motion/react';
-import { Navigation, Clock, Plus, Minus, Target, Maximize, Map as MapIcon } from 'lucide-react';
+import { Navigation, Clock, Plus, Minus, Target, Maximize, Map as MapIcon, ChevronRight, ChevronLeft, ArrowUp, CornerUpRight, CornerUpLeft, Milestone, Volume2 } from 'lucide-react';
 import { useAppStore, RouteProfile } from '../store/useAppStore';
 import { getDistance } from 'geolib';
 import { getLocalizedName, t } from '../utils/translations';
@@ -140,9 +140,32 @@ function MapController({ showNearest, nearestMosques, routingToMosque, selectedM
   return null;
 }
 
+// Voice Guidance Engine
+const speak = (text: string, lang: string) => {
+  if ('speechSynthesis' in window) {
+    // Cancel any current speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    // Map our language codes to voices
+    utterance.lang = lang === 'ar' ? 'ar-SA' : (lang === 'fr' ? 'fr-FR' : 'en-US');
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  }
+};
+
+// Maneuver Icon Helper
+const ManeuverIcon = ({ type, modifier, size = 24 }: { type: string, modifier?: string, size?: number }) => {
+  if (modifier?.includes('left')) return <CornerUpLeft size={size} />;
+  if (modifier?.includes('right')) return <CornerUpRight size={size} />;
+  if (type === 'depart' || type === 'arrive') return <Milestone size={size} />;
+  return <ArrowUp size={size} />;
+};
+
 function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey }: { start: [number, number], end: [number, number], isMainRoute?: boolean, routeProfile?: string | RouteProfile, routeKey: string, key?: string }) {
   const [positions, setPositions] = useState<[number, number][]>([start, end]);
-  const { setRouteInfo } = useAppStore();
+  const { setRouteInfo, setNavSteps } = useAppStore();
 
   useEffect(() => {
     if (isNaN(start[0]) || isNaN(start[1]) || isNaN(end[0]) || isNaN(end[1])) return;
@@ -151,19 +174,23 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
     const fetchRoute = async () => {
       try {
         const profile = routeProfile === 'foot' ? 'walking' : 'driving';
-        const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${start[0]},${start[1]};${end[0]},${end[1]}?geometries=geojson&overview=full&alternatives=true&access_token=${MAPBOX_TOKEN}`;
+        // ADDED steps=true and banner_instructions=true for Pro Navigation
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${start[0]},${start[1]};${end[0]},${end[1]}?geometries=geojson&overview=full&steps=true&banner_instructions=true&access_token=${MAPBOX_TOKEN}`;
         
         const response = await fetch(url);
         const data = await response.json();
         if (isMounted && data.routes && data.routes.length > 0) {
-          // Sort alternatives by DISTANCE to find the physically shortest road
           const routes = [...data.routes].sort((a, b) => a.distance - b.distance);
           const shortestRoute = routes[0];
           
           if (shortestRoute.geometry) {
             setPositions(shortestRoute.geometry.coordinates);
-            if (isMainRoute && shortestRoute.distance) {
+            if (isMainRoute) {
               setRouteInfo({ distance: shortestRoute.distance, duration: shortestRoute.duration });
+              // Extract steps for turn-by-turn guidance
+              if (shortestRoute.legs && shortestRoute.legs[0].steps) {
+                setNavSteps(shortestRoute.legs[0].steps);
+              }
             }
           }
         }
@@ -249,7 +276,7 @@ export default function MapView({
   isLocating?: boolean;
   setIsLocating?: (val: boolean) => void;
 }) {
-  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle, setMapStyle, setUserLocation, isNavigating, setIsNavigating, routeInfo } = useAppStore();
+  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle, setMapStyle, setUserLocation, isNavigating, setIsNavigating, routeInfo, navSteps, currentStepIndex, setCurrentStepIndex, lastSpokenStepIndex, setLastSpokenStepIndex } = useAppStore();
   
   const mapRef = useRef<any>(null);
   const [is3D, setIs3D] = useState(true);
@@ -315,10 +342,10 @@ export default function MapView({
     });
   };
 
-  // Adaptive 3D Navigation Camera
+  // Adaptive 3D Navigation Camera & Live Guidance
   useEffect(() => {
     if (isNavigating && userLocation && routingToMosque && mapRef.current) {
-      // Calculate heading towards destination
+      // 1. Camera Logic
       const dy = routingToMosque.latitude - userLocation.latitude;
       const dx = routingToMosque.longitude - userLocation.longitude;
       const angle = Math.atan2(dx, dy) * (180 / Math.PI);
@@ -332,10 +359,44 @@ export default function MapView({
         duration: 1500,
         essential: true
       });
+
+      // 2. Step-by-Step Guidance Logic
+      if (navSteps.length > 0) {
+        // Find current step based on distance
+        const currentStep = navSteps[currentStepIndex];
+        if (currentStep && currentStep.maneuver) {
+          const distToCurrent = getDistance(
+            { latitude: userLocation.latitude, longitude: userLocation.longitude },
+            { latitude: currentStep.maneuver.location[1], longitude: currentStep.maneuver.location[0] }
+          );
+
+          // If we passed the step (within 20m), advance to next
+          if (distToCurrent < 20 && currentStepIndex < navSteps.length - 1) {
+            setCurrentStepIndex(currentStepIndex + 1);
+          }
+
+          // Voice Guidance Trigger (speak if approaching step)
+          if (distToCurrent < 100 && lastSpokenStepIndex !== currentStepIndex) {
+            speak(currentStep.maneuver.instruction, language);
+            setLastSpokenStepIndex(currentStepIndex);
+          }
+        }
+
+        // Arrival Detection
+        const distToDestination = getDistance(
+          { latitude: userLocation.latitude, longitude: userLocation.longitude },
+          { latitude: routingToMosque.latitude, longitude: routingToMosque.longitude }
+        );
+        if (distToDestination < 20 && lastSpokenStepIndex !== 9999) {
+          speak(t("You have arrived at your destination", language), language);
+          setLastSpokenStepIndex(9999);
+          setTimeout(() => setIsNavigating(false), 5000);
+        }
+      }
     } else if (!isNavigating && mapRef.current) {
       mapRef.current.easeTo({ pitch: is3D ? 60 : 0, duration: 1000 });
     }
-  }, [isNavigating, userLocation, routingToMosque, is3D]);
+  }, [isNavigating, userLocation, routingToMosque, is3D, navSteps, currentStepIndex, lastSpokenStepIndex]);
 
   const handleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -490,14 +551,25 @@ export default function MapView({
               animate={{ y: 0, opacity: 1 }}
               className="bg-white/95 backdrop-blur-2xl rounded-3xl p-4 shadow-2xl border border-white/50 flex items-center gap-4"
             >
-              <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                <Navigation size={24} />
+              <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0">
+                {navSteps[currentStepIndex] ? (
+                  <ManeuverIcon 
+                    type={navSteps[currentStepIndex].maneuver.type} 
+                    modifier={navSteps[currentStepIndex].maneuver.modifier} 
+                  />
+                ) : (
+                  <Navigation size={24} />
+                )}
               </div>
               <div className="flex-1 overflow-hidden">
-                 <p className="text-[10px] font-black uppercase text-blue-600 tracking-wider mb-0.5">Navigating To</p>
-                 <h4 className="font-black text-gray-900 truncate">{getLocalizedName(routingToMosque, language)}</h4>
-                 <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
-                    <Clock size={12} />
+                 <p className="text-[10px] font-black uppercase text-blue-600 tracking-wider mb-0.5">
+                   {navSteps[currentStepIndex] ? t("Next Maneuver", language) : t("Navigating To", language)}
+                 </p>
+                 <h4 className="font-black text-gray-900 truncate leading-tight">
+                   {navSteps[currentStepIndex] ? navSteps[currentStepIndex].maneuver.instruction : getLocalizedName(routingToMosque, language)}
+                 </h4>
+                 <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mt-0.5">
+                    <Volume2 size={12} className="text-emerald-500" />
                     <span>{Math.round((routeInfo?.duration || 0) / 60)} min</span>
                     <span>•</span>
                     <span>{((routeInfo?.distance || 0) / 1000).toFixed(1)} km</span>
