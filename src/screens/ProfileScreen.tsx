@@ -10,10 +10,10 @@ import { useAppStore } from '../store/useAppStore';
 import { cn } from '../lib/utils';
 import { t, getLocalizedName } from '../utils/translations';
 import { useState, useMemo } from 'react';
-import Map, { Marker } from 'react-map-gl/mapbox';
+import { Map, Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoiYXlvdWJvdW15IiwiYSI6ImNtbmF5dDVzZTBuZzEyb3F5cDlpY3g1aTcifQ.1VyhjdZII-HnNd8-SdfgRg';
 
 const MiniMapHTMLIcon = () => (
   <div className="relative flex items-center justify-center pointer-events-none">

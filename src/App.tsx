@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import { useAppStore } from './store/useAppStore';
 import BottomNav from './components/BottomNav';
 import BottomSheet from './components/BottomSheet';

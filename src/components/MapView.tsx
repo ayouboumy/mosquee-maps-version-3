@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, memo, useCallback, useRef } from 'react';
-import Map, { Marker, Source, Layer, useMap } from 'react-map-gl/mapbox';
+import { Map, Marker, Source, Layer, useMap } from 'react-map-gl/mapbox';
+import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import useSupercluster from 'use-supercluster';
 import { motion, AnimatePresence } from 'motion/react';
@@ -8,7 +9,8 @@ import { useAppStore } from '../store/useAppStore';
 import { getDistance } from 'geolib';
 import { getLocalizedName, t } from '../utils/translations';
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoiYXlvdWJvdW15IiwiYSI6ImNtbmF5dDVzZTBuZzEyb3F5cDlpY3g1aTcifQ.1VyhjdZII-HnNd8-SdfgRg';
+mapboxgl.accessToken = MAPBOX_TOKEN;
 
 // Custom HTML Markers using Divs (matching Leaflet style)
 const MosqueMarkerHTML = ({ isSelected }: { isSelected: boolean }) => (
@@ -335,11 +337,11 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
   });
 
   const mapStyleUrl = mapStyle === 'street' 
-    ? 'mapbox://styles/mapbox/streets-v12'
-    : 'mapbox://styles/mapbox/satellite-streets-v12';
+    ? 'mapbox://styles/mapbox/streets-v11'
+    : 'mapbox://styles/mapbox/satellite-v9';
 
   return (
-    <div className="w-full h-full relative" style={{ isolation: 'isolate' }}>
+    <div className="absolute inset-0 z-0 bg-gray-200" style={{ isolation: 'isolate' }}>
       <Map
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
@@ -347,45 +349,9 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         mapStyle={mapStyleUrl}
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
-        terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
       >
-        <Source
-          id="mapbox-dem"
-          type="raster-dem"
-          url="mapbox://mapbox.mapbox-terrain-dem-v1"
-          tileSize={512}
-          maxzoom={14}
-        />
+        {/* Simplified map to test visibility */}
         
-        {/* Sky styling for 3D look */}
-        <Layer
-          id="sky"
-          type="sky"
-          paint={{
-            'sky-type': 'atmosphere',
-            'sky-atmosphere-sun': [0.0, 0.0],
-            'sky-atmosphere-sun-intensity': 15
-          }}
-        />
-
-        {/* 3D Buildings */}
-        {mapStyle === 'street' && (
-           <Layer
-             id="3d-buildings"
-             source="composite"
-             source-layer="building"
-             filter={['==', 'extrude', 'true']}
-             type="fill-extrusion"
-             minzoom={15}
-             paint={{
-               'fill-extrusion-color': '#aaa',
-               'fill-extrusion-height': ['get', 'height'],
-               'fill-extrusion-base': ['get', 'min_height'],
-               'fill-extrusion-opacity': 0.6
-             }}
-           />
-        )}
-
         <MapController showNearest={showNearest} nearestMosques={nearestMosques} routingToMosque={routingToMosque} selectedMosque={selectedMosque} />
 
         {/* User Location */}
