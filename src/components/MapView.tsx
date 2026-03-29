@@ -277,14 +277,21 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
           });
         }
       } catch (e) {
-        console.warn("Standard map error, fallback to legacy theme:", e);
+        console.warn("Standard map error:", e);
       }
     };
+
+    // Use specific 'style.import.load' for Mapbox Standard imports
+    map.on('style.import.load', (e) => {
+      if (e.importId === 'basemap') {
+        updateConfig();
+      }
+    });
 
     if (map.isStyleLoaded()) {
       updateConfig();
     } else {
-      map.once('style.load', updateConfig);
+      map.on('style.load', updateConfig);
     }
   }, [currentTheme]);
 
@@ -351,8 +358,16 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         processData(data1, batch1);
         processData(data2, batch2);
 
-        setRoadDurations(durationsMap);
-        setRoadDistances(distancesMap);
+        // FALLBACK: If we got no results from Matrix, use straight-line distance as duration fallback
+        if (Object.keys(distancesMap).length === 0) {
+          batch1.forEach(c => {
+            distancesMap[c.id] = c.straightDist;
+            durationsMap[c.id] = c.straightDist / 1.4; // 1.4 m/s walking speed
+          });
+        }
+
+        setRoadDurations(prev => ({ ...prev, ...durationsMap }));
+        setRoadDistances(prev => ({ ...prev, ...distancesMap }));
       } catch (e) {
         console.error("Matrix API Error:", e);
       }
@@ -407,8 +422,8 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
         projection={{ name: 'globe' }}
       >
-        <NavigationControl position="top-right" />
-        <GeolocateControl position="top-right" trackUserLocation={true} showUserHeading={true} />
+        <NavigationControl position="top-right" visualizePitch={true} />
+        <GeolocateControl position="bottom-right" trackUserLocation={true} showUserHeading={true} />
         <FullscreenControl position="top-left" />
         <ScaleControl position="bottom-left" />
         <Source
