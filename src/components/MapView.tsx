@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, memo, useCallback, useRef } from 'react';
 import { Map, Marker, Source, Layer, useMap, NavigationControl, FullscreenControl, GeolocateControl, ScaleControl } from 'react-map-gl/mapbox';
+import { LocateFixed, MapPin, Layers, Box, Compass } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import useSupercluster from 'use-supercluster';
@@ -229,10 +230,21 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
   );
 }
 
-export default function MapView({ showNearest }: { showNearest?: boolean }) {
-  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle } = useAppStore();
+export default function MapView({ 
+  showNearest, 
+  setShowNearest, 
+  isLocating, 
+  setIsLocating 
+}: { 
+  showNearest?: boolean;
+  setShowNearest?: (val: boolean) => void;
+  isLocating?: boolean;
+  setIsLocating?: (val: boolean) => void;
+}) {
+  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle, setMapStyle, setUserLocation } = useAppStore();
   
   const mapRef = useRef<any>(null);
+  const [is3D, setIs3D] = useState(true);
   const [roadDurations, setRoadDurations] = useState<Record<number, number>>({});
   const [roadDistances, setRoadDistances] = useState<Record<number, number>>({});
 
@@ -267,9 +279,35 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
   };
 
   const handleGeolocate = () => {
-    if (isUserLocationValid) {
-      mapRef.current?.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: 15, duration: 1000 });
+    if ('geolocation' in navigator) {
+      setIsLocating?.(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setUserLocation({ latitude, longitude });
+          mapRef.current?.flyTo({ center: [longitude, latitude], zoom: 15, duration: 1000 });
+          setIsLocating?.(false);
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          setIsLocating?.(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
     }
+  };
+
+  const toggle3D = () => {
+    const new3D = !is3D;
+    setIs3D(new3D);
+    mapRef.current?.easeTo({
+      pitch: new3D ? 60 : 0,
+      duration: 1000
+    });
+  };
+
+  const resetNorth = () => {
+    mapRef.current?.easeTo({ bearing: 0, duration: 1000 });
   };
 
   const handleFullscreen = () => {
@@ -404,42 +442,97 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         mapStyle={currentMapStyle}
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
-        terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
+        projection={{ name: 'globe' }}
       >
-        {/* The Absolute Fix: Custom High-End Control Stack (ZERO OVERLAP) */}
-        <div className="absolute top-24 right-4 z-[9999] flex flex-col gap-4">
-           {/* Zoom Group */}
-           <div className="flex flex-col bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 overflow-hidden ring-1 ring-black/5">
-              <button 
-                onClick={() => handleZoom(1)}
-                className="p-3 hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100 transition-colors text-gray-700"
-              >
-                <Plus size={20} strokeWidth={3} />
-              </button>
-              <button 
-                onClick={() => handleZoom(-1)}
-                className="p-3 hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700"
-              >
-                <Minus size={20} strokeWidth={3} />
-              </button>
-           </div>
+        {/* Consolidated Navigation Utility Stack */}
+        {!routingToMosque && (
+          <div className={`absolute top-24 ${language === 'ar' ? 'left-4' : 'right-4'} z-[9999] flex flex-col gap-3`}>
+            {/* Primary Action Group */}
+            <div className="flex flex-col bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 overflow-hidden ring-1 ring-black/5">
+                <button 
+                  onClick={() => handleZoom(1)}
+                  className="p-3 hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100 transition-colors text-gray-700"
+                  title={t("Zoom In", language)}
+                >
+                  <Plus size={20} strokeWidth={3} />
+                </button>
+                <button 
+                  onClick={() => handleZoom(-1)}
+                  className="p-3 hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100 transition-colors text-gray-700"
+                  title={t("Zoom Out", language)}
+                >
+                  <Minus size={20} strokeWidth={3} />
+                </button>
+                <button 
+                  onClick={resetNorth}
+                  className="p-3 hover:bg-gray-50 active:bg-gray-100 transition-colors text-emerald-600"
+                  title={t("Reset North", language)}
+                >
+                  <Compass size={20} />
+                </button>
+            </div>
 
-           {/* Location Group */}
-           <button 
-             onClick={handleGeolocate}
-             className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 hover:bg-gray-50 active:bg-gray-100 transition-colors text-blue-600 ring-1 ring-black/5"
-           >
-             <Target size={20} />
-           </button>
+            {/* Smart Utilities Group */}
+            <div className="flex flex-col bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 overflow-hidden ring-1 ring-black/5">
+                <button 
+                  onClick={handleGeolocate}
+                  className={`p-3 transition-colors relative ${isLocating ? 'text-blue-600' : 'text-gray-700'} hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100`}
+                  title={t("My Location", language)}
+                >
+                  {isLocating && <div className="absolute inset-2 rounded-full border-2 border-blue-400 animate-ping opacity-75" />}
+                  <LocateFixed size={20} />
+                </button>
+                <button 
+                  onClick={toggle3D}
+                  className={`p-3 transition-colors border-b border-gray-100 ${is3D ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-700 hover:bg-gray-50'}`}
+                  title={t("3D Buildings", language)}
+                >
+                  <Box size={20} />
+                </button>
+                <button 
+                  onClick={() => setShowNearest?.(!showNearest)}
+                  className={`p-3 transition-colors border-b border-gray-100 ${showNearest ? 'text-amber-600 bg-amber-50/50' : 'text-gray-700 hover:bg-gray-50'}`}
+                  title={t("Nearest Mosques", language)}
+                >
+                  <MapPin size={20} />
+                </button>
+                <button 
+                  onClick={() => setMapStyle(mapStyle === 'street' ? 'satellite' : 'street')}
+                  className={`p-3 transition-colors ${mapStyle === 'satellite' ? 'text-emerald-600 bg-emerald-50/50' : 'text-gray-700 hover:bg-gray-50'}`}
+                  title={t(mapStyle === 'street' ? 'Satellite Mode' : 'Street Mode', language)}
+                >
+                  <Layers size={20} />
+                </button>
+            </div>
 
-           {/* Fullscreen Group */}
-           <button 
-             onClick={handleFullscreen}
-             className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700 ring-1 ring-black/5"
-           >
-             <Maximize size={20} />
-           </button>
-        </div>
+            {/* Secondary Utilities */}
+            <button 
+              onClick={handleFullscreen}
+              className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700 ring-1 ring-black/5"
+              title={t("Toggle Fullscreen", language)}
+            >
+              <Maximize size={20} />
+            </button>
+          </div>
+        )}
+
+        {/* 3D Buildings Layer (Classic Style Implementation) */}
+        {is3D && mapStyle !== 'satellite' && (
+          <Layer
+            id="3d-buildings"
+            source="composite"
+            source-layer="building"
+            filter={['==', 'extrude', 'true']}
+            type="fill-extrusion"
+            minzoom={15}
+            paint={{
+              'fill-extrusion-color': currentTheme === 'dark' ? '#334155' : '#e2e8f0',
+              'fill-extrusion-height': ['get', 'height'],
+              'fill-extrusion-base': ['get', 'min_height'],
+              'fill-extrusion-opacity': 0.8
+            }}
+          />
+        )}
         <Source
           id="mapbox-dem"
           type="raster-dem"
@@ -563,7 +656,13 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
       </Map>
 
       {/* Spiritual & Navigation Overlays */}
-      <QiblaCompass />
+      <motion.div 
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="absolute top-24 left-4 z-[10000] flex flex-col items-center gap-2"
+      >
+        <QiblaCompass />
+      </motion.div>
 
       <AnimatePresence>
         {showNearest && nearestMosques.length > 0 && !routingToMosque && (

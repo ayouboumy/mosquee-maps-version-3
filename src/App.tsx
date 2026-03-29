@@ -59,43 +59,12 @@ export default function App() {
         <div className="flex-1 relative overflow-hidden">
           {activeTab === 'map' && (
             <PullToRefresh onRefresh={refreshLocation}>
-              <MapView showNearest={showNearest} />
-
-              {/* Floating Controls */}
-              {!routingToMosque && (
-                <div className={`absolute top-safe-4 ${language === 'ar' ? 'left-4' : 'right-4'} z-[1000] flex flex-col gap-3 animate-fade-up`}>
-                  <div className="glass rounded-full flex flex-col overflow-hidden shadow-card hover:shadow-card-hover transition-shadow text-gray-700 bg-white/70">
-                    <button
-                      onClick={requestLocation}
-                      className="p-3.5 bg-transparent hover:bg-white/40 transition-all duration-300 relative group"
-                      title={t("My Location", language)}
-                    >
-                      {isLocating && <div className="absolute inset-2 rounded-full border-2 border-blue-400 animate-ping opacity-75" />}
-                      <LocateFixed size={22} className={`group-hover:text-blue-600 group-active:scale-95 transition-transform ${isLocating ? "text-blue-600" : ""}`} />
-                    </button>
-
-                    <div className="h-[1px] w-8 bg-gray-300/50 mx-auto" />
-
-                    <button
-                      onClick={() => setShowNearest(!showNearest)}
-                      className={`p-3.5 transition-all duration-300 group ${showNearest ? 'bg-blue-500/90 text-white' : 'bg-transparent hover:bg-white/40 text-gray-700'}`}
-                      title={t("Nearest Mosques", language)}
-                    >
-                      <MapPin size={22} className={`group-active:scale-95 transition-transform ${showNearest ? "text-white" : "group-hover:text-blue-600"}`} />
-                    </button>
-
-                    <div className="h-[1px] w-8 bg-gray-300/50 mx-auto" />
-
-                    <button
-                      onClick={() => setMapStyle(mapStyle === 'street' ? 'satellite' : 'street')}
-                      className={`p-3.5 transition-all duration-300 group ${mapStyle === 'satellite' ? 'bg-emerald-500/90 text-white' : 'bg-transparent hover:bg-white/40 text-gray-700'}`}
-                      title={t(mapStyle === 'street' ? 'Satellite Mode' : 'Street Mode', language)}
-                    >
-                      <Layers size={22} className={`group-active:scale-95 transition-transform ${mapStyle === 'satellite' ? "text-white" : "group-hover:text-emerald-600"}`} />
-                    </button>
-                  </div>
-                </div>
-              )}
+              <MapView 
+                showNearest={showNearest} 
+                setShowNearest={setShowNearest} 
+                isLocating={isLocating}
+                setIsLocating={setIsLocating}
+              />
 
               {locationError && (
                 <div className="absolute top-safe-20 left-4 right-4 z-[1000] p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl shadow-sm">
