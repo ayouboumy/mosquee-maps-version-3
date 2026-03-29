@@ -86,11 +86,19 @@ function MapController({ showNearest, nearestMosques, routingToMosque, selectedM
           Math.max(userLocation.longitude, routingToMosque.longitude),
           Math.max(userLocation.latitude, routingToMosque.latitude)
         ];
-        map.fitBounds(bounds, { padding: 50 });
+        map.fitBounds(bounds, { padding: 80, duration: 1000 });
+        // Set pitch for better 3D navigation feel
+        map.easeTo({ pitch: 45, bearing: 0, duration: 1000 });
       }
     } else if (selectedMosque) {
       if (typeof selectedMosque.latitude === 'number' && typeof selectedMosque.longitude === 'number') {
-        map.flyTo({ center: [selectedMosque.longitude, selectedMosque.latitude], zoom: 15, duration: 1500 });
+        map.flyTo({ 
+          center: [selectedMosque.longitude, selectedMosque.latitude], 
+          zoom: 17, 
+          pitch: 60,
+          duration: 2000,
+          essential: true
+        });
       }
     } else if (showNearest && isUserLocationValid && nearestMosques.length > 0) {
       const validNearest = nearestMosques.filter((m: any) => 
@@ -104,19 +112,19 @@ function MapController({ showNearest, nearestMosques, routingToMosque, selectedM
           Math.min(...lons), Math.min(...lats),
           Math.max(...lons), Math.max(...lats)
         ];
-        map.fitBounds(bounds, { padding: 50 });
+        map.fitBounds(bounds, { padding: 100, duration: 1500 });
+        map.easeTo({ pitch: 45, duration: 1500 });
       }
     } else if (!showNearest && isUserLocationValid && !routingToMosque) {
-      map.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: 13, duration: 1000 });
+      map.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: 13, pitch: 0, bearing: 0, duration: 1000 });
     }
   }, [userLocation, isUserLocationValid, map, showNearest, nearestMosques, routingToMosque, selectedMosque]);
 
   return null;
 }
 
-function RouteLine({ start, end, straightDistance, isMainRoute, routeProfile = 'driving', routeKey }: { start: [number, number], end: [number, number], straightDistance: number, isMainRoute?: boolean, routeProfile?: string, routeKey: string }) {
+function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey }: { start: [number, number], end: [number, number], isMainRoute?: boolean, routeProfile?: string, routeKey: string }) {
   const [positions, setPositions] = useState<[number, number][]>([start, end]);
-  const [routeDistance, setRouteDistance] = useState<number>(straightDistance);
   const { setRouteInfo } = useAppStore();
 
   useEffect(() => {
@@ -133,12 +141,9 @@ function RouteLine({ start, end, straightDistance, isMainRoute, routeProfile = '
         if (isMounted && data.routes && data.routes.length > 0) {
           const bestRoute = data.routes[0];
           if (bestRoute.geometry) {
-            setPositions(bestRoute.geometry.coordinates); // Mapbox returns GeoJSON [lng, lat]
-            if (bestRoute.distance) {
-              setRouteDistance(bestRoute.distance);
-              if (isMainRoute) {
-                setRouteInfo({ distance: bestRoute.distance, duration: bestRoute.duration });
-              }
+            setPositions(bestRoute.geometry.coordinates);
+            if (isMainRoute && bestRoute.distance) {
+              setRouteInfo({ distance: bestRoute.distance, duration: bestRoute.duration });
             }
           }
         }
@@ -155,15 +160,14 @@ function RouteLine({ start, end, straightDistance, isMainRoute, routeProfile = '
   }, [isMainRoute, setRouteInfo]);
 
   const isDriving = routeProfile === 'driving';
-  const mainInnerColor = isDriving ? '#3B82F6' : '#10B981';
-  const mainOuterColor = isDriving ? '#1D4ED8' : '#047857'; 
-
-  const innerColor = isMainRoute ? mainInnerColor : '#9CA3AF';
-  const outerColor = isMainRoute ? mainOuterColor : '#4B5563';
-
-  const innerWeight = 6;
-  const outerWeight = 10;
-  
+  // Litinear Premium Colors (Vibrant Neon)
+  const innerColor = isMainRoute 
+    ? (isDriving ? '#3b82f6' : '#10b981') 
+    : '#94a3b8';
+  const glowColor = isMainRoute 
+    ? (isDriving ? '#3b82f644' : '#10b98144') 
+    : 'transparent';
+    
   const validPositions = positions.filter(p => p && typeof p[0] === 'number' && !isNaN(p[0]) && typeof p[1] === 'number' && !isNaN(p[1]));
   if (validPositions.length < 2) return null;
 
@@ -179,34 +183,57 @@ function RouteLine({ start, end, straightDistance, isMainRoute, routeProfile = '
   return (
     <>
       <Source id={`route-source-${routeKey}`} type="geojson" data={geojson}>
-        <Layer 
-          id={`route-outer-${routeKey}`} 
-          type="line" 
-          layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-          paint={{ 'line-color': outerColor, 'line-width': outerWeight, 'line-opacity': isMainRoute ? 1 : 0.8 }} 
-        />
+        {/* Glow Layer */}
+        {isMainRoute && (
+          <Layer 
+            id={`route-glow-${routeKey}`} 
+            type="line" 
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+            paint={{ 
+              'line-color': innerColor, 
+              'line-width': 12, 
+              'line-blur': 8,
+              'line-opacity': 0.6
+            }} 
+          />
+        )}
+        {/* Main Line */}
         <Layer 
           id={`route-inner-${routeKey}`} 
           type="line" 
           layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-          paint={{ 'line-color': innerColor, 'line-width': innerWeight, 'line-opacity': 1 }} 
+          paint={{ 
+            'line-color': innerColor, 
+            'line-width': isMainRoute ? 6 : 4, 
+            'line-opacity': isMainRoute ? 1 : 0.6 
+          }} 
         />
-        <Layer 
-          id={`route-dash-${routeKey}`} 
-          type="line" 
-          layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-          paint={{ 'line-color': '#ffffff', 'line-width': innerWeight - 2, 'line-opacity': 0.8, 'line-dasharray': isMainRoute ? [1, 2] : [2, 3] }} 
-        />
+        {/* Dash/Directional UI for Main Route */}
+        {isMainRoute && (
+          <Layer 
+            id={`route-dash-${routeKey}`} 
+            type="line" 
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+            paint={{ 
+              'line-color': '#ffffff', 
+              'line-width': 2, 
+              'line-opacity': 0.8, 
+              'line-dasharray': [1, 2] 
+            }} 
+          />
+        )}
       </Source>
     </>
   );
 }
 
 export default function MapView({ showNearest }: { showNearest?: boolean }) {
-  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapStyle } = useAppStore();
+  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme } = useAppStore();
   
   const mapRef = useRef<any>(null);
-  
+  const [roadDurations, setRoadDurations] = useState<Record<number, number>>({});
+  const [isMatrixLoading, setIsMatrixLoading] = useState(false);
+
   const isUserLocationValid = userLocation && 
     typeof userLocation.latitude === 'number' && !isNaN(userLocation.latitude) &&
     typeof userLocation.longitude === 'number' && !isNaN(userLocation.longitude);
@@ -215,110 +242,86 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
     longitude: isUserLocationValid ? userLocation.longitude : -7.5898,
     latitude: isUserLocationValid ? userLocation.latitude : 33.5731,
     zoom: 12,
-    pitch: 45,
+    pitch: 0,
     bearing: 0
   });
 
   const filteredByCommune = useMemo(() => {
-    const validMosques = mosques.filter(m => 
-      typeof m.latitude === 'number' && !isNaN(m.latitude) && m.latitude !== 0 &&
-      typeof m.longitude === 'number' && !isNaN(m.longitude) && m.longitude !== 0
+    return mosques.filter(m => 
+      typeof m.latitude === 'number' && !isNaN(m.latitude) && 
+      (!selectedCommune || m.commune === selectedCommune)
     );
-    if (!selectedCommune) return validMosques;
-    return validMosques.filter(m => m.commune === selectedCommune);
   }, [mosques, selectedCommune]);
 
-  const [roadDistances, setRoadDistances] = useState<Record<number, number>>({});
-  const [roadDurations, setRoadDurations] = useState<Record<number, number>>({});
+  // Mapbox Matrix API for Ultra-Accuracy
+  useEffect(() => {
+    if (!isUserLocationValid || filteredByCommune.length === 0 || !showNearest) return;
+
+    const fetchMatrix = async () => {
+      setIsMatrixLoading(true);
+      try {
+        // Step 1: Find 25 nearest candidates by straight line (Distance filter)
+        const candidates = filteredByCommune
+          .map(m => ({ 
+            ...m, 
+            straightDist: getDistance(
+              { lat: userLocation.latitude, lng: userLocation.longitude },
+              { lat: m.latitude, lng: m.longitude }
+            ) 
+          }))
+          .sort((a, b) => a.straightDist - b.straightDist)
+          .slice(0, 24); // Limit to 24 + origin = 25 for Matrix API free tier limits
+
+        if (candidates.length === 0) return;
+
+        // Step 2: Build Matrix Request
+        const coordinates = [
+          `${userLocation.longitude},${userLocation.latitude}`,
+          ...candidates.map(c => `${c.longitude},${c.latitude}`)
+        ].join(';');
+
+        const profile = routeProfile === 'foot' ? 'walking' : 'driving';
+        const url = `https://api.mapbox.com/directions-matrix/v1/mapbox/${profile}/${coordinates}?annotations=duration,distance&access_token=${MAPBOX_TOKEN}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.code === 'Ok' && data.durations) {
+          const durationsMap: Record<number, number> = {};
+          data.durations[0].forEach((dur: number, idx: number) => {
+            if (idx > 0 && dur !== null) {
+              const mosqueId = candidates[idx - 1].id;
+              durationsMap[mosqueId] = dur;
+            }
+          });
+          setRoadDurations(durationsMap);
+        }
+      } catch (e) {
+        console.error("Matrix API Error:", e);
+      } finally {
+        setIsMatrixLoading(false);
+      }
+    };
+
+    fetchMatrix();
+  }, [userLocation, filteredByCommune, routeProfile, showNearest]);
 
   const nearestMosques = useMemo(() => {
-    if (!isUserLocationValid || filteredByCommune.length === 0) return [];
+    if (!showNearest) return [];
     
-    const withStraightDistance = filteredByCommune.map(mosque => {
-      try {
-        return {
-          ...mosque,
-          straightDistance: getDistance(
-            { latitude: userLocation.latitude, longitude: userLocation.longitude },
-            { latitude: mosque.latitude, longitude: mosque.longitude }
-          )
-        };
-      } catch (e) {
-        return { ...mosque, straightDistance: Infinity };
-      }
-    });
-
-    const topCandidates = withStraightDistance
-      .sort((a, b) => a.straightDistance - b.straightDistance)
-      .slice(0, 15);
-
-    const withRoadMetrics = topCandidates.map(m => ({
-      ...m,
-      distance: roadDistances[m.id] !== undefined ? roadDistances[m.id] : m.straightDistance,
-      duration: roadDurations[m.id] !== undefined ? roadDurations[m.id] : Infinity
-    }));
-
-    return withRoadMetrics
-      .sort((a, b) => {
-        if (a.duration !== Infinity && b.duration !== Infinity) return a.duration - b.duration;
-        return a.distance - b.distance;
-      })
+    return filteredByCommune
+      .map(m => ({
+        ...m,
+        duration: roadDurations[m.id] !== undefined ? roadDurations[m.id] : Infinity
+      }))
+      .filter(m => m.duration !== Infinity)
+      .sort((a, b) => a.duration - b.duration)
       .slice(0, 3);
-  }, [filteredByCommune, userLocation, roadDistances, roadDurations]);
+  }, [filteredByCommune, roadDurations, showNearest]);
 
-  // Fetch true Mapbox distances for accuracy
-  useEffect(() => {
-    if (!isUserLocationValid || filteredByCommune.length === 0) return;
+  const displayedMosques = showNearest ? nearestMosques : filteredByCommune;
 
-    const fetchRoadDistances = async () => {
-      try {
-        const top15 = [...filteredByCommune]
-          .map(m => {
-            let d = Infinity;
-            try { d = getDistance({ latitude: userLocation.latitude, longitude: userLocation.longitude }, { latitude: m.latitude, longitude: m.longitude }); } catch (e) {}
-            return { id: m.id, lat: m.latitude, lng: m.longitude, d };
-          })
-          .sort((a, b) => a.d - b.d)
-          .slice(0, 5);
-
-        if (top15.length === 0) return;
-
-        const distances: Record<number, number> = {};
-        const durations: Record<number, number> = {};
-
-        const promises = top15.map(async (m) => {
-          try {
-            const profile = 'driving';
-            const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${userLocation.longitude},${userLocation.latitude};${m.lng},${m.lat}?access_token=${MAPBOX_TOKEN}`;
-            const response = await fetch(url);
-            if (!response.ok) return null;
-            const data = await response.json();
-            if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
-              const bestRoute = data.routes[0];
-              return { id: m.id, distance: bestRoute.distance, duration: bestRoute.duration };
-            }
-          } catch (e) { console.error(e); }
-          return null;
-        });
-
-        const results = await Promise.all(promises);
-        results.forEach(res => {
-          if (res) {
-            distances[res.id] = res.distance;
-            durations[res.id] = res.duration;
-          }
-        });
-
-        setRoadDistances(distances);
-        setRoadDurations(durations);
-      } catch (error) { console.error(error); }
-    };
-    fetchRoadDistances();
-  }, [userLocation, filteredByCommune, routeProfile]);
-
-  const displayedMosques = showNearest && isUserLocationValid ? nearestMosques : filteredByCommune;
-
-  // Supercluster setup for Mapbox
+  // Supercluster setup
   const points = useMemo(() => {
     return displayedMosques.map(m => ({
       type: "Feature",
@@ -336,17 +339,24 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
     options: { radius: 75, maxZoom: 20 }
   });
 
-  const mapStyleUrl = mapStyle === 'street' 
-    ? 'mapbox://styles/mapbox/streets-v12'
-    : 'mapbox://styles/mapbox/satellite-streets-v12';
+  // Calculate theme light color based on mapTheme
+  const getMapTheme = () => {
+    if (mapTheme === 'auto') {
+      const hour = new Date().getHours();
+      return (hour >= 19 || hour <= 6) ? 'dark' : 'light';
+    }
+    return mapTheme;
+  };
+
+  const currentTheme = getMapTheme();
 
   return (
-    <div className="absolute inset-0 z-0" style={{ isolation: 'isolate' }}>
+    <div className="absolute inset-0 z-0 bg-gray-900" style={{ isolation: 'isolate' }}>
       <Map
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
         ref={mapRef}
-        mapStyle={mapStyleUrl}
+        mapStyle="mapbox://styles/mapbox/standard"
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
         terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
@@ -359,36 +369,12 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
           maxzoom={14}
         />
         
-        {/* Sky styling for 3D look */}
-        <Layer
-          id="sky"
-          type="sky"
-          paint={{
-            'sky-type': 'atmosphere',
-            'sky-atmosphere-sun': [0.0, 0.0],
-            'sky-atmosphere-sun-intensity': 15
-          }}
+        <MapController 
+          showNearest={showNearest} 
+          nearestMosques={nearestMosques} 
+          routingToMosque={routingToMosque} 
+          selectedMosque={selectedMosque} 
         />
-
-        {/* 3D Buildings */}
-        {mapStyle === 'street' && (
-           <Layer
-             id="3d-buildings"
-             source="composite"
-             source-layer="building"
-             filter={['==', 'extrude', 'true']}
-             type="fill-extrusion"
-             minzoom={15}
-             paint={{
-               'fill-extrusion-color': '#aaa',
-               'fill-extrusion-height': ['get', 'height'],
-               'fill-extrusion-base': ['get', 'min_height'],
-               'fill-extrusion-opacity': 0.6
-             }}
-           />
-        )}
-
-        <MapController showNearest={showNearest} nearestMosques={nearestMosques} routingToMosque={routingToMosque} selectedMosque={selectedMosque} />
 
         {/* User Location */}
         {isUserLocationValid && (
@@ -403,25 +389,21 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
             routeKey={`${routingToMosque.id}-${routeProfile}-main`}
             start={[userLocation.longitude, userLocation.latitude]}
             end={[routingToMosque.longitude, routingToMosque.latitude]}
-            straightDistance={getDistance({ latitude: userLocation.latitude, longitude: userLocation.longitude }, { latitude: routingToMosque.latitude, longitude: routingToMosque.longitude })}
             isMainRoute={true}
             routeProfile={routeProfile}
           />
         )}
 
-        {/* Nearest Mosques Secondary Target Routes */}
-        {showNearest && isUserLocationValid && !routingToMosque && nearestMosques.map((mosque) => {
-          if (typeof mosque.latitude !== 'number' || typeof mosque.longitude !== 'number') return null;
-          return (
-            <RouteLine
-              routeKey={`${mosque.id}-${routeProfile}-alt`}
-              start={[userLocation.longitude, userLocation.latitude]}
-              end={[mosque.longitude, mosque.latitude]}
-              straightDistance={(mosque as any).distance || 0}
-              routeProfile={routeProfile}
-            />
-          );
-        })}
+        {/* Alternative Routes for Nearest */}
+        {showNearest && isUserLocationValid && !routingToMosque && nearestMosques.map((mosque) => (
+          <RouteLine
+            key={`alt-${mosque.id}`}
+            routeKey={`${mosque.id}-${routeProfile}-alt`}
+            start={[userLocation.longitude, userLocation.latitude]}
+            end={[mosque.longitude, mosque.latitude]}
+            routeProfile={routeProfile}
+          />
+        ))}
 
         {/* Clustering and Markers */}
         {clusters.map(cluster => {
@@ -432,11 +414,11 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
             return (
               <Marker key={`cluster-${cluster.id}`} latitude={latitude} longitude={longitude}>
                 <div 
-                  className="w-10 h-10 bg-emerald-600 text-white flex items-center justify-center rounded-full font-bold shadow-lg border-2 border-white ring-4 ring-emerald-600/30 cursor-pointer hover:bg-emerald-500 transition-colors"
+                  className="w-10 h-10 bg-emerald-600 text-white flex items-center justify-center rounded-full font-bold shadow-lg border-2 border-white ring-4 ring-emerald-600/30 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
                     const expansionZoom = Math.min(supercluster.getClusterExpansionZoom(Number(cluster.id)), 20);
-                    mapRef.current?.flyTo({ center: [longitude, latitude], zoom: expansionZoom, duration: 500 });
+                    mapRef.current?.flyTo({ center: [longitude, latitude], zoom: expansionZoom, duration: 800 });
                   }}
                 >
                   {pointCount}
@@ -450,7 +432,7 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
 
           if (routingToMosque && routingToMosque.id === mosque.id) {
              return (
-               <Marker key={mosque.id} longitude={mosque.longitude} latitude={mosque.latitude} anchor="bottom">
+               <Marker key={`dest-${mosque.id}`} longitude={mosque.longitude} latitude={mosque.latitude} anchor="bottom">
                   <div onClick={(e) => { e.stopPropagation(); setSelectedMosque(mosque); }}>
                      <DestinationMarkerHTML />
                   </div>
@@ -458,40 +440,32 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
              )
           }
 
-          if (routingToMosque && routingToMosque.id !== mosque.id) {
-             return null; // hide other markers during navigation
-          }
+          if (routingToMosque && routingToMosque.id !== mosque.id) return null;
 
           return (
             <Marker key={mosque.id} longitude={mosque.longitude} latitude={mosque.latitude} anchor="bottom" style={{ zIndex: isSelected ? 100 : 1 }}>
-              <div 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedMosque(mosque);
-                  // Optionally zoom into mosque on click
-                  mapRef.current?.flyTo({ center: [mosque.longitude, mosque.latitude], zoom: 16 });
-                }}
-              >
-                <div className="relative group/marker">
-                  <MosqueMarkerHTML isSelected={isSelected} />
-                  
-                  {/* Native Mapbox doesn't use Tooltip components, we just show a label conditionally or on hover */}
-                  {(viewState.zoom >= 14 || showNearest || isSelected) && (
-                    <div className="absolute top-[-35px] left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur shadow-md px-3 py-1.5 rounded-xl border border-gray-100 opacity-0 group-hover/marker:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                      <p className="text-xs font-black text-gray-800">{getLocalizedName(mosque, language)}</p>
-                      {showNearest && roadDistances[mosque.id] !== undefined && (
-                        <p className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1 rounded inline-block mt-0.5">
-                          {(roadDistances[mosque.id] / 1000).toFixed(1)} km
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
+              <div onClick={(e) => { e.stopPropagation(); setSelectedMosque(mosque); }}>
+                <MosqueMarkerHTML isSelected={isSelected} />
               </div>
             </Marker>
           );
         })}
 
+        {/* Standard Style Configuration - Sync with app state */}
+        <Layer
+          id="standard-config"
+          type="background"
+          layout={{ visibility: 'none' }}
+          // @ts-ignore - mapbox-gl-js custom properties for Standard Style
+          metadata={{
+             'mapbox:config': {
+                'theme': currentTheme,
+                'lightPreset': 'day',
+                'show3dObjects': true,
+                'showTerrain': true
+             }
+          }}
+        />
       </Map>
 
       {/* Near Mosques Carousel */}
@@ -501,64 +475,30 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
             initial={{ y: 200, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 200, opacity: 0 }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-24 left-0 right-0 z-[1000] pb-2 pt-4 px-4 overflow-x-auto scrollbar-hide pointer-events-auto"
+            className="absolute bottom-24 left-0 right-0 z-[1000] pb-2 pt-4 px-4 overflow-x-auto scrollbar-hide flex gap-4 min-w-max"
           >
-            <div className="flex gap-4 min-w-max">
-              {nearestMosques.map((mosque, i) => (
-                <motion.button
-                  key={mosque.id}
-                  initial={{ opacity: 0, x: 50 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  onClick={() => {
-                    setSelectedMosque(mosque);
-                    setRoutingToMosque(null);
-                  }}
-                  className={`flex flex-col text-left bg-white/95 backdrop-blur-xl rounded-[24px] p-3 shadow-bottom-sheet w-[240px] border transition-all active:scale-95 ${selectedMosque?.id === mosque.id ? 'border-emerald-400 ring-4 ring-emerald-500/10' : 'border-white/50'}`}
-                >
-                  <div className="relative w-full h-24 rounded-[16px] overflow-hidden mb-3">
-                     {mosque.image ? (
-                      <img src={mosque.image} alt={getLocalizedName(mosque, language)} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-emerald-100" />
-                    )}
-                    <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md rounded-lg px-2 py-1 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-white text-[10px] uppercase font-black tracking-widest leading-none">
-                        #{i + 1} {t('Nearest', language)}
-                      </span>
-                    </div>
+            {nearestMosques.map((mosque, i) => (
+              <motion.button
+                key={mosque.id}
+                onClick={() => setSelectedMosque(mosque)}
+                className={`flex flex-col text-left bg-white/95 backdrop-blur-xl rounded-[24px] p-3 shadow-2xl w-[260px] border-2 transition-all active:scale-95 ${selectedMosque?.id === mosque.id ? 'border-emerald-500 ring-4 ring-emerald-500/10' : 'border-transparent'}`}
+              >
+                <div className="relative w-full h-24 rounded-[16px] overflow-hidden mb-3">
+                  <img src={mosque.image} className="w-full h-full object-cover" alt="" />
+                  <div className="absolute top-2 left-2 bg-emerald-600/90 backdrop-blur-md rounded-lg px-2 py-1 flex items-center gap-1.5">
+                    <span className="text-white text-[10px] font-black uppercase">#{i + 1} {t('Nearest', language)}</span>
                   </div>
-                  <h3 className="font-black text-gray-900 leading-tight mb-1 truncate">{getLocalizedName(mosque, language)}</h3>
-                  <div className="flex items-center justify-between mt-auto">
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 font-bold px-2 py-1 rounded-lg">
-                      {roadDurations[mosque.id] ? (
-                        <>
-                          <Clock size={12} className="shrink-0" />
-                          {Math.round(roadDurations[mosque.id] / 60)} min
-                        </>
-                      ) : (
-                        <>
-                          <Navigation size={12} className="shrink-0" />
-                          {(() => {
-                             try {
-                               return (getDistance(
-                                 { latitude: userLocation!.latitude, longitude: userLocation!.longitude },
-                                 { latitude: mosque.latitude, longitude: mosque.longitude }
-                               ) / 1000).toFixed(1) + ' km';
-                             } catch (e) {
-                               return '';
-                             }
-                          })()}
-                        </>
-                      )}
-                    </div>
-                    <span className="text-[10px] uppercase font-black text-gray-400 bg-gray-100 px-2 py-1 rounded-full">{t(mosque.type, language)}</span>
+                </div>
+                <h3 className="font-black text-gray-900 truncate mb-2">{getLocalizedName(mosque, language)}</h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1 text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-lg">
+                    <Clock size={12} />
+                    {Math.round(mosque.duration / 60)} min
                   </div>
-                </motion.button>
-              ))}
-            </div>
+                  <span className="text-[10px] font-black text-gray-400 bg-gray-100 px-2 py-1 rounded-full uppercase truncate max-w-[100px]">{t(mosque.type, language)}</span>
+                </div>
+              </motion.button>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>

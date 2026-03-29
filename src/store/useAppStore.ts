@@ -6,6 +6,7 @@ import mosquesData from '../data/mosques.json';
 export type Language = 'ar' | 'fr';
 export type RouteProfile = 'foot' | 'driving';
 export type MapStyle = 'street' | 'satellite';
+export type MapTheme = 'light' | 'dark' | 'auto';
 
 export interface RouteInfo {
   distance: number;
@@ -25,6 +26,7 @@ interface AppState {
   dynamicTranslations: Record<string, Record<Language, string>>;
   selectedCommune: string | null;
   mapStyle: MapStyle;
+  mapTheme: MapTheme;
   
   toggleFavorite: (id: number) => void;
   setActiveTab: (tab: TabType) => void;
@@ -38,6 +40,7 @@ interface AppState {
   addDynamicTranslations: (translations: Record<string, Record<Language, string>>) => void;
   setSelectedCommune: (commune: string | null) => void;
   setMapStyle: (style: MapStyle) => void;
+  setMapTheme: (theme: MapTheme) => void;
   refreshLocation: () => Promise<void>;
 }
 
@@ -56,6 +59,7 @@ export const useAppStore = create<AppState>()(
       dynamicTranslations: {},
       selectedCommune: null,
       mapStyle: 'street',
+      mapTheme: 'auto',
 
       toggleFavorite: (id) =>
         set((state) => ({
@@ -76,6 +80,7 @@ export const useAppStore = create<AppState>()(
       })),
       setSelectedCommune: (commune) => set({ selectedCommune: commune }),
       setMapStyle: (style) => set({ mapStyle: style }),
+      setMapTheme: (theme) => set({ mapTheme: theme }),
       refreshLocation: () => new Promise((resolve) => {
         if ('geolocation' in navigator) {
           navigator.geolocation.getCurrentPosition(
@@ -107,7 +112,8 @@ export const useAppStore = create<AppState>()(
         language: state.language,
         dynamicTranslations: state.dynamicTranslations,
         selectedCommune: state.selectedCommune,
-        mapStyle: state.mapStyle
+        mapStyle: state.mapStyle,
+        mapTheme: state.mapTheme
       }),
     }
   )

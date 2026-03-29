@@ -1,4 +1,4 @@
-import { Upload, CheckCircle2, AlertCircle, Database, FileSpreadsheet, Globe, Loader2, MapPin, Footprints, Car, ChevronDown } from 'lucide-react';
+import { Upload, CheckCircle2, AlertCircle, Database, FileSpreadsheet, Globe, Loader2, MapPin, Footprints, Car, ChevronDown, Sun, Moon, Monitor } from 'lucide-react';
 import { useRef, useState, ChangeEvent, useMemo } from 'react';
 import { useAppStore, Language } from '../store/useAppStore';
 import * as XLSX from 'xlsx';
@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 export default function SettingsScreen() {
-  const { mosques, importMosques, language, setLanguage, addDynamicTranslations, selectedCommune, setSelectedCommune, routeProfile, setRouteProfile } = useAppStore();
+  const { mosques, importMosques, language, setLanguage, addDynamicTranslations, selectedCommune, setSelectedCommune, routeProfile, setRouteProfile, mapTheme, setMapTheme } = useAppStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -368,6 +368,58 @@ export default function SettingsScreen() {
                 </button>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Map Appearance Settings */}
+        <section className="bg-white rounded-[24px] shadow-card border border-gray-100/80 overflow-hidden">
+          <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center icon-badge-indigo shrink-0 shadow-sm border border-white">
+              <Sun size={18} className="text-indigo-700" strokeWidth={2.5} />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-gray-900 tracking-tight">{t('Map Appearance', language)}</h2>
+              <p className="text-xs text-gray-500 font-medium">{t('Choose your preferred map theme', language)}</p>
+            </div>
+          </div>
+          
+          <div className="p-5 flex gap-3">
+            <button
+              onClick={() => setMapTheme('auto')}
+              className={cn(
+                "flex-1 flex flex-col items-center justify-center gap-2 py-3 rounded-[16px] transition-all border-2",
+                mapTheme === 'auto' 
+                  ? "bg-indigo-50 border-indigo-500 text-indigo-700 shadow-sm" 
+                  : "bg-white border-gray-100 text-gray-500 hover:bg-gray-50"
+              )}
+            >
+              <Monitor size={20} className={mapTheme === 'auto' ? "text-indigo-600" : ""} />
+              <span className="text-xs font-bold">{t('Auto', language)}</span>
+            </button>
+            <button
+              onClick={() => setMapTheme('light')}
+              className={cn(
+                "flex-1 flex flex-col items-center justify-center gap-2 py-3 rounded-[16px] transition-all border-2",
+                mapTheme === 'light' 
+                  ? "bg-indigo-50 border-indigo-500 text-indigo-700 shadow-sm" 
+                  : "bg-white border-gray-100 text-gray-500 hover:bg-gray-50"
+              )}
+            >
+              <Sun size={20} className={mapTheme === 'light' ? "text-indigo-600" : ""} />
+              <span className="text-xs font-bold">{t('Light', language)}</span>
+            </button>
+            <button
+              onClick={() => setMapTheme('dark')}
+              className={cn(
+                "flex-1 flex flex-col items-center justify-center gap-2 py-3 rounded-[16px] transition-all border-2",
+                mapTheme === 'dark' 
+                  ? "bg-indigo-50 border-indigo-500 text-indigo-700 shadow-sm" 
+                  : "bg-white border-gray-100 text-gray-500 hover:bg-gray-50"
+              )}
+            >
+              <Moon size={20} className={mapTheme === 'dark' ? "text-indigo-600" : ""} />
+              <span className="text-xs font-bold">{t('Dark', language)}</span>
+            </button>
           </div>
         </section>
 
