@@ -337,11 +337,11 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
   });
 
   const mapStyleUrl = mapStyle === 'street' 
-    ? 'mapbox://styles/mapbox/streets-v11'
-    : 'mapbox://styles/mapbox/satellite-v9';
+    ? 'mapbox://styles/mapbox/streets-v12'
+    : 'mapbox://styles/mapbox/satellite-streets-v12';
 
   return (
-    <div className="absolute inset-0 z-0 bg-gray-200" style={{ isolation: 'isolate' }}>
+    <div className="absolute inset-0 z-0" style={{ isolation: 'isolate' }}>
       <Map
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
@@ -349,9 +349,45 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         mapStyle={mapStyleUrl}
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
+        terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
       >
-        {/* Simplified map to test visibility */}
+        <Source
+          id="mapbox-dem"
+          type="raster-dem"
+          url="mapbox://mapbox.mapbox-terrain-dem-v1"
+          tileSize={512}
+          maxzoom={14}
+        />
         
+        {/* Sky styling for 3D look */}
+        <Layer
+          id="sky"
+          type="sky"
+          paint={{
+            'sky-type': 'atmosphere',
+            'sky-atmosphere-sun': [0.0, 0.0],
+            'sky-atmosphere-sun-intensity': 15
+          }}
+        />
+
+        {/* 3D Buildings */}
+        {mapStyle === 'street' && (
+           <Layer
+             id="3d-buildings"
+             source="composite"
+             source-layer="building"
+             filter={['==', 'extrude', 'true']}
+             type="fill-extrusion"
+             minzoom={15}
+             paint={{
+               'fill-extrusion-color': '#aaa',
+               'fill-extrusion-height': ['get', 'height'],
+               'fill-extrusion-base': ['get', 'min_height'],
+               'fill-extrusion-opacity': 0.6
+             }}
+           />
+        )}
+
         <MapController showNearest={showNearest} nearestMosques={nearestMosques} routingToMosque={routingToMosque} selectedMosque={selectedMosque} />
 
         {/* User Location */}
