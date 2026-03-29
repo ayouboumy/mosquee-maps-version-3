@@ -31,7 +31,7 @@ export default function QiblaCompass() {
     <motion.div 
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      className="absolute top-24 left-4 z-10 flex flex-col items-center gap-2"
+      className="absolute top-28 right-4 z-[9999] flex flex-col items-center gap-2"
     >
       <div className="relative w-14 h-14 bg-white/90 backdrop-blur-md rounded-full shadow-2xl border border-white flex items-center justify-center overflow-hidden">
         {/* Compass Ring */}

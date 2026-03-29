@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, memo, useCallback, useRef } from 'react';
-import { Map, Marker, Source, Layer, useMap } from 'react-map-gl/mapbox';
+import { Map, Marker, Source, Layer, useMap, NavigationControl, FullscreenControl, GeolocateControl } from 'react-map-gl/mapbox';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import useSupercluster from 'use-supercluster';
@@ -142,16 +142,19 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
     const fetchRoute = async () => {
       try {
         const profile = routeProfile === 'foot' ? 'walking' : 'driving';
-        const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${start[0]},${start[1]};${end[0]},${end[1]}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${start[0]},${start[1]};${end[0]},${end[1]}?geometries=geojson&overview=full&alternatives=true&access_token=${MAPBOX_TOKEN}`;
         
         const response = await fetch(url);
         const data = await response.json();
         if (isMounted && data.routes && data.routes.length > 0) {
-          const bestRoute = data.routes[0];
-          if (bestRoute.geometry) {
-            setPositions(bestRoute.geometry.coordinates);
-            if (isMainRoute && bestRoute.distance) {
-              setRouteInfo({ distance: bestRoute.distance, duration: bestRoute.duration });
+          // Sort alternatives by DISTANCE to find the physically shortest road
+          const routes = [...data.routes].sort((a, b) => a.distance - b.distance);
+          const shortestRoute = routes[0];
+          
+          if (shortestRoute.geometry) {
+            setPositions(shortestRoute.geometry.coordinates);
+            if (isMainRoute && shortestRoute.distance) {
+              setRouteInfo({ distance: shortestRoute.distance, duration: shortestRoute.duration });
             }
           }
         }
@@ -231,6 +234,7 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
   
   const mapRef = useRef<any>(null);
   const [roadDurations, setRoadDurations] = useState<Record<number, number>>({});
+  const [roadDistances, setRoadDistances] = useState<Record<number, number>>({});
 
   const isUserLocationValid = userLocation && 
     typeof userLocation.latitude === 'number' && !isNaN(userLocation.latitude) &&
@@ -261,6 +265,18 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
       try {
         if (map.getImport('basemap')) {
           map.setConfigProperty('basemap', 'theme', currentTheme);
+          // Set lightPreset for richer dark/light experience
+          const preset = currentTheme === 'dark' ? 'night' : 'day';
+          map.setConfigProperty('basemap', 'lightPreset', preset);
+          
+          // Add 3D Fog/Atmosphere for "Expert" premium feel
+          map.setFog({
+            'range': [0.5, 10],
+            'color': currentTheme === 'dark' ? '#242b3b' : '#ffffff',
+            'high-color': currentTheme === 'dark' ? '#161c24' : '#add8e6',
+            'space-color': currentTheme === 'dark' ? '#0b1015' : '#d8f2ff',
+            'horizon-blend': 0.02
+          });
         }
       } catch (e) {
         console.warn("Could not set map config:", e);
@@ -286,7 +302,8 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
 
     const fetchMatrix = async () => {
       try {
-        const candidates = filteredByCommune
+        // Sort by straight line distance first to get reasonable candidates
+        const sortedByStraight = filteredByCommune
           .map(m => ({ 
             ...m, 
             straightDist: getDistance(
@@ -294,32 +311,49 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
               { lat: m.latitude, lng: m.longitude }
             ) 
           }))
-          .sort((a, b) => a.straightDist - b.straightDist)
-          .slice(0, 24);
+          .sort((a, b) => a.straightDist - b.straightDist);
 
+        // Check top 50 (two batches of 25)
+        const candidates = sortedByStraight.slice(0, 50);
         if (candidates.length === 0) return;
 
-        const coordinates = [
-          `${userLocation.longitude},${userLocation.latitude}`,
-          ...candidates.map(c => `${c.longitude},${c.latitude}`)
-        ].join(';');
-
         const profile = routeProfile === 'foot' ? 'walking' : 'driving';
-        const url = `https://api.mapbox.com/directions-matrix/v1/mapbox/${profile}/${coordinates}?annotations=duration,distance&access_token=${MAPBOX_TOKEN}`;
+        const batch1 = candidates.slice(0, 25);
+        const batch2 = candidates.slice(25, 50);
         
-        const response = await fetch(url);
-        const data = await response.json();
+        const fetchBatch = async (batch: typeof candidates) => {
+          if (batch.length === 0) return [];
+          const coordinates = [
+            `${userLocation.longitude},${userLocation.latitude}`,
+            ...batch.map(c => `${c.longitude},${c.latitude}`)
+          ].join(';');
+          const url = `https://api.mapbox.com/directions-matrix/v1/mapbox/${profile}/${coordinates}?annotations=duration,distance&access_token=${MAPBOX_TOKEN}`;
+          const res = await fetch(url);
+          return await res.json();
+        };
 
-        if (data.code === 'Ok' && data.durations) {
-          const durationsMap: Record<number, number> = {};
-          data.durations[0].forEach((dur: number, idx: number) => {
-            if (idx > 0 && dur !== null) {
-              const mosqueId = candidates[idx - 1].id;
-              durationsMap[mosqueId] = dur;
-            }
-          });
-          setRoadDurations(durationsMap);
-        }
+        const [data1, data2] = await Promise.all([fetchBatch(batch1), fetchBatch(batch2)]);
+        
+        const durationsMap: Record<number, number> = {};
+        const distancesMap: Record<number, number> = {};
+
+        const processData = (data: any, batch: typeof candidates) => {
+          if (data.code === 'Ok' && data.durations && data.distances) {
+            data.durations[0].forEach((dur: number, idx: number) => {
+              if (idx > 0 && dur !== null) {
+                const mosqueId = batch[idx - 1].id;
+                durationsMap[mosqueId] = dur;
+                distancesMap[mosqueId] = data.distances[0][idx];
+              }
+            });
+          }
+        };
+
+        processData(data1, batch1);
+        processData(data2, batch2);
+
+        setRoadDurations(durationsMap);
+        setRoadDistances(distancesMap);
       } catch (e) {
         console.error("Matrix API Error:", e);
       }
@@ -334,10 +368,12 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
     return filteredByCommune
       .map(m => ({
         ...m,
-        duration: roadDurations[m.id] !== undefined ? roadDurations[m.id] : Infinity
+        duration: roadDurations[m.id] !== undefined ? roadDurations[m.id] : Infinity,
+        distance: roadDistances[m.id] !== undefined ? roadDistances[m.id] : Infinity
       }))
-      .filter(m => m.duration !== Infinity)
-      .sort((a, b) => a.duration - b.duration)
+      .filter(m => m.distance !== Infinity)
+      // SORT BY DISTANCE (per user request for the 'shortest road')
+      .sort((a, b) => a.distance - b.distance)
       .slice(0, 3);
   }, [filteredByCommune, roadDurations, showNearest]);
 
@@ -370,7 +406,13 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
         terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
+        projection={{ name: 'globe' }}
       >
+        <div className="absolute top-4 right-4 z-[9999] flex flex-col gap-2">
+           <NavigationControl position="top-right" />
+           <GeolocateControl position="top-right" trackUserLocation={true} showUserHeading={true} />
+           <FullscreenControl position="top-right" />
+        </div>
         <Source
           id="mapbox-dem"
           type="raster-dem"
