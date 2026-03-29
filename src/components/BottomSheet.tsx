@@ -194,10 +194,17 @@ export default function BottomSheet() {
               {/* Quick Actions (Horizontal Scroll) */}
               <div className="flex items-center gap-2.5 overflow-x-auto pb-4 pt-1 scrollbar-hide -mx-5 px-5">
                 <button
-                  onClick={handleOpenGoogleMapsRoute}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-full font-bold hover:bg-blue-100 transition-colors shrink-0 group border border-blue-100/50"
+                  onClick={() => setRoutingToMosque(selectedMosque)}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-full font-bold hover:bg-emerald-700 transition-all shrink-0 shadow-lg shadow-emerald-600/20 active:scale-95 group"
                 >
-                  <MapIcon size={18} className="group-hover:scale-110 transition-transform" />
+                  <Navigation size={18} className="fill-current group-hover:translate-x-0.5 transition-transform" />
+                  {t('Route', language)}
+                </button>
+                <button
+                  onClick={handleOpenGoogleMapsRoute}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-full font-bold hover:bg-blue-100 transition-colors shrink-0 border border-blue-100/50"
+                >
+                  <MapIcon size={18} />
                   {t('Google Maps', language)}
                 </button>
                 <button

@@ -1,5 +1,5 @@
 import React, { useRef, useState, ChangeEvent, useMemo, useEffect } from 'react';
-import { Upload, CheckCircle2, AlertCircle, Database, FileSpreadsheet, Globe, Loader2, MapPin, Footprints, Car, ChevronDown, Sun, Moon, Monitor } from 'lucide-react';
+import { Upload, CheckCircle2, AlertCircle, Database, FileSpreadsheet, Globe, Loader2, MapPin, Footprints, Car, ChevronDown, Sun, Moon, Monitor, Navigation } from 'lucide-react';
 import { useAppStore, Language } from '../store/useAppStore';
 import * as XLSX from 'xlsx';
 import { t } from '../utils/translations';
@@ -253,6 +253,14 @@ export default function SettingsScreen() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 pb-28 space-y-6">
+        {/* Pro-Nav Branding Header */}
+        <div className="bg-emerald-600 rounded-[32px] p-6 text-white shadow-xl shadow-emerald-600/20 relative overflow-hidden mb-2">
+           <div className="relative z-10">
+              <h2 className="text-2xl font-black mb-1">Mosque Finder Pro</h2>
+              <p className="text-emerald-100 text-sm font-medium">Version 2.0.0 (Pro-Nav Edition)</p>
+           </div>
+           <Navigation className="absolute -bottom-4 -right-4 w-32 h-32 text-white/10 rotate-12" />
+        </div>
         
         {/* Language Selection */}
         <section className="bg-white rounded-[24px] shadow-card border border-gray-100/80 overflow-hidden">
