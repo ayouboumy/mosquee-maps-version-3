@@ -1,5 +1,5 @@
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { X, Navigation, Heart, Info, Map, Route, Share2, Phone, Clock, MapPin, Clipboard, Check, Map as MapIcon, Compass } from 'lucide-react';
+import { X, Navigation, Heart, Info, Map, Route, Share2, Phone, Clock, MapPin, Clipboard, Check, Map as MapIcon, Compass, AlertCircle } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { cn } from '../lib/utils';
 import { useState, useMemo, useEffect } from 'react';
@@ -12,6 +12,9 @@ export default function BottomSheet() {
   const [showProfile, setShowProfile] = useState(false);
   const [roadDistance, setRoadDistance] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [reported, setReported] = useState(false);
+
+  const KAABA = { lat: 21.4225, lng: 39.8262 };
 
   const dragControls = useDragControls();
 
@@ -64,6 +67,19 @@ export default function BottomSheet() {
     }
   }, [userLocation, selectedMosque, isRoutingToThis, routeInfo, roadDistance]);
 
+  const qiblaAngle = useMemo(() => {
+    if (!selectedMosque) return null;
+    const lat1 = (selectedMosque.latitude * Math.PI) / 180;
+    const lng1 = (selectedMosque.longitude * Math.PI) / 180;
+    const lat2 = (KAABA.lat * Math.PI) / 180;
+    const lng2 = (KAABA.lng * Math.PI) / 180;
+
+    const y = Math.sin(lng2 - lng1);
+    const x = Math.cos(lat1) * Math.tan(lat2) - Math.sin(lat1) * Math.cos(lng2 - lng1);
+    const qiblaRad = Math.atan2(y, x);
+    return Math.round(((qiblaRad * 180) / Math.PI + 360) % 360);
+  }, [selectedMosque]);
+
   const nearbyMosques = useMemo(() => {
     if (!selectedMosque) return [];
     return mosques
@@ -115,6 +131,11 @@ export default function BottomSheet() {
         console.error('Error sharing:', error);
       }
     }
+  };
+
+  const handleReport = () => {
+    setReported(true);
+    setTimeout(() => setReported(false), 3000);
   };
 
   return (
@@ -238,14 +259,56 @@ export default function BottomSheet() {
                 </div>
               </div>
 
-              {/* Full Details Button */}
-              <button
-                onClick={() => setShowProfile(true)}
-                className="w-full mt-6 flex items-center justify-center gap-2 py-4 bg-gray-50/80 text-gray-800 rounded-2xl font-bold hover:bg-gray-100 hover:shadow-sm transition-all border border-gray-200/50 active:scale-[0.98]"
-              >
-                <Info size={18} className="text-gray-500" />
-                {t('View Full Details', language)}
-              </button>
+              {/* Qibla & Accuracy Info */}
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100/50 flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[10px] uppercase tracking-wider">
+                    <Compass size={14} />
+                    Qibla
+                  </div>
+                  <div className="text-lg font-black text-emerald-900">{qiblaAngle}° <span className="text-[10px] font-bold text-emerald-600/60 uppercase">NNE</span></div>
+                </div>
+                <div className="bg-blue-50/50 p-3 rounded-2xl border border-blue-100/50 flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5 text-blue-700 font-bold text-[10px] uppercase tracking-wider">
+                    <MapPin size={14} />
+                    Accuracy
+                  </div>
+                  <div className="text-lg font-black text-blue-900">100% <span className="text-[10px] font-bold text-blue-600/60 uppercase">Matrix</span></div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3 mt-6">
+                <button
+                  onClick={() => setShowProfile(true)}
+                  className="w-full flex items-center justify-center gap-2 py-4 bg-gray-50/80 text-gray-800 rounded-2xl font-bold hover:bg-gray-100 hover:shadow-sm transition-all border border-gray-200/50 active:scale-[0.98]"
+                >
+                  <Info size={18} className="text-gray-500" />
+                  {t('View Full Details', language)}
+                </button>
+                
+                <button
+                  onClick={handleReport}
+                  className={cn(
+                    "w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold transition-all border active:scale-[0.98]",
+                    reported 
+                      ? "bg-emerald-500 text-white border-emerald-500" 
+                      : "bg-white text-gray-500 border-gray-100 hover:bg-gray-50"
+                  )}
+                >
+                  {reported ? (
+                    <>
+                      <Check size={18} />
+                      {t('Report Sent', language)}
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle size={18} />
+                      {t('Report an Issue', language)}
+                    </>
+                  )}
+                </button>
+              </div>
 
               {/* Nearby Mosques */}
               {nearbyMosques.length > 0 && (

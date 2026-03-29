@@ -16,14 +16,32 @@ export default function SearchScreen() {
   const [selectedCommune, setSelectedCommune] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'distance'>(userLocation ? 'distance' : 'name');
   const [isSearching, setIsSearching] = useState(false);
+  const [globalResults, setGlobalResults] = useState<any[]>([]);
+  const MAPBOX_TOKEN = (import.meta as any).env.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoiYXlvdWJvdW15IiwiYSI6ImNtbmF5dDVzZTBuZzEyb3F5cDlpY3g1aTcifQ.1VyhjdZII-HnNd8-SdfgRg';
 
-  // Debounce search input
+  // Debounce search and fetch global results
   useEffect(() => {
     setIsSearching(true);
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       setDebouncedQuery(query);
+      
+      if (query.trim().length > 2) {
+        try {
+          const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(query)}&access_token=${MAPBOX_TOKEN}&session_token=session-123&limit=3&types=address,place,locality`;
+          const response = await fetch(url);
+          const data = await response.json();
+          if (data.suggestions) {
+            setGlobalResults(data.suggestions);
+          }
+        } catch (e) {
+          console.error("Global search error:", e);
+        }
+      } else {
+        setGlobalResults([]);
+      }
+      
       setIsSearching(false);
-    }, 300);
+    }, 400);
     return () => clearTimeout(timer);
   }, [query]);
 
@@ -81,7 +99,6 @@ export default function SearchScreen() {
       });
     }
 
-    // Limit to 50 results to keep rendering fast and premium
     return filtered.slice(0, 50);
   }, [mosques, debouncedQuery, selectedType, selectedCommune, language, sortBy, userLocation]);
 
@@ -90,9 +107,23 @@ export default function SearchScreen() {
     setActiveTab('map');
   };
 
+  const handleGlobalSelect = async (suggestion: any) => {
+    try {
+      const url = `https://api.mapbox.com/search/searchbox/v1/retrieve/${suggestion.mapbox_id}?access_token=${MAPBOX_TOKEN}&session_token=session-123`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.features && data.features.length > 0) {
+        // In a real app, we'd center the map here. 
+        // For now, we just switch to the map.
+        setActiveTab('map');
+      }
+    } catch (e) {
+      console.error("Retrieve error:", e);
+    }
+  };
+
   return (
     <div className="h-full bg-gray-50 flex flex-col max-w-md mx-auto">
-      {/* Sticky Header with Blur */}
       <div className="z-20 px-4 pt-safe-4 pb-4 sticky top-0 border-b border-gray-200/50 bg-white/80 backdrop-blur-2xl">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">{t('Search', language)}</h1>
@@ -117,7 +148,6 @@ export default function SearchScreen() {
           />
         </div>
 
-        {/* Filter Chips */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
             <div className={`flex items-center text-gray-400 ${language === 'ar' ? 'ml-2' : 'mr-2'}`}>
@@ -178,30 +208,35 @@ export default function SearchScreen() {
       <div className="flex-1 overflow-hidden relative">
         <PullToRefresh onRefresh={refreshLocation}>
           <div className="p-4 pb-28 space-y-4">
-
-            {/* Sort Toggle */}
-            {filteredMosques.length > 0 && userLocation && (
-              <div className="flex justify-end mb-2">
-                <button
-                  onClick={() => setSortBy(sortBy === 'name' ? 'distance' : 'name')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-xs font-bold text-gray-600 transition-all active:scale-95"
-                >
-                  <ArrowUpDown size={14} />
-                  {sortBy === 'distance' ? t('Distance', language) : t('Name', language)}
-                </button>
+            {globalResults.length > 0 && (
+              <div className="space-y-2 mb-6">
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">{t('Locations', language)}</div>
+                {globalResults.map((suggestion) => (
+                  <button
+                    key={suggestion.mapbox_id}
+                    onClick={() => handleGlobalSelect(suggestion)}
+                    className="w-full flex items-center gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm active:scale-[0.98] transition-all"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                      <MapPin size={16} />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-sm font-black text-gray-900 leading-none mb-1">{suggestion.name}</div>
+                      <div className="text-[10px] font-bold text-gray-400">{suggestion.full_address}</div>
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
 
+            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-2">{t('Mosques', language)}</div>
+
             {isSearching ? (
-              // Skeleton loading state
               Array.from({ length: 5 }).map((_, i) => (
                 <div key={`skel-${i}`} className="bg-white rounded-[24px] p-3 shadow-card border border-gray-100/80 flex gap-4">
                   <div className="w-24 h-24 rounded-[18px] skeleton shrink-0" />
                   <div className="flex-1 py-1 space-y-3">
-                    <div className="flex justify-between">
-                      <div className="w-16 h-4 skeleton rounded-full" />
-                      <div className="w-12 h-4 skeleton rounded-full" />
-                    </div>
+                    <div className="flex justify-between"><div className="w-16 h-4 skeleton rounded-full" /><div className="w-12 h-4 skeleton rounded-full" /></div>
                     <div className="w-3/4 h-5 skeleton rounded-full" />
                     <div className="w-full h-3 skeleton rounded-full" />
                   </div>
@@ -222,74 +257,29 @@ export default function SearchScreen() {
                   >
                     <div className="relative shrink-0 w-24 h-24">
                       {mosque.image ? (
-                        <img
-                          src={mosque.image}
-                          loading="lazy"
-                          alt={getLocalizedName(mosque, language)}
-                          className="w-full h-full rounded-[18px] object-cover"
-                        />
+                        <img src={mosque.image} loading="lazy" alt="" className="w-full h-full rounded-[18px] object-cover" />
                       ) : (
                         <div className="w-full h-full rounded-[18px] bg-gray-100 flex items-center justify-center">
                           <Compass size={24} className="text-gray-300" />
                         </div>
                       )}
-                      <div className="absolute inset-0 rounded-[18px] ring-1 ring-inset ring-black/10"></div>
-                      {favorites.includes(mosque.id) && (
-                        <div className="absolute -top-1 -right-1 bg-white p-1 rounded-full shadow-md z-10">
-                          <Heart size={14} className="fill-red-500 text-red-500" />
-                        </div>
-                      )}
                     </div>
-
-                    <div className={`flex-1 flex flex-col justify-center ${language === 'ar' ? 'pl-1' : 'pr-1'} min-w-0`}>
+                    <div className="flex-1 flex flex-col justify-center min-w-0">
                       <div className="flex justify-between items-start mb-1.5 gap-2">
                         <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest truncate">{t(mosque.type, language)}</div>
                         <div className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md shrink-0">{mosque.commune}</div>
                       </div>
-
-                      <h3 className="font-black text-gray-900 leading-tight mb-2 line-clamp-2 text-base group-hover:text-emerald-700 transition-colors">
-                        {mosque.name}
-                      </h3>
-
-                      <div className="flex items-center justify-between mt-auto gap-2">
-                        <div className="flex items-start text-gray-500 text-xs truncate">
-                          <MapPin size={12} className={`${language === 'ar' ? 'ml-1' : 'mr-1'} shrink-0 text-gray-400`} />
-                          <span className="truncate font-medium">{t(mosque.address, language)}</span>
+                      <h3 className="font-black text-gray-900 leading-tight mb-2 line-clamp-2 text-base group-hover:text-emerald-700 transition-colors">{mosque.name}</h3>
+                      <div className="flex items-center justify-between mt-auto gap-2 text-gray-500 text-xs truncate font-medium">
+                        <div className="flex items-center gap-1 truncate">
+                          <MapPin size={12} className="shrink-0 text-gray-400" />
+                          <span className="truncate">{mosque.address}</span>
                         </div>
-
-                        {userLocation && (
-                          <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg shrink-0">
-                            <Compass size={12} />
-                            {(() => {
-                              try {
-                                return (getDistance(
-                                  { latitude: userLocation.latitude, longitude: userLocation.longitude },
-                                  { latitude: mosque.latitude, longitude: mosque.longitude }
-                                ) / 1000).toFixed(1) + ' km';
-                              } catch (e) {
-                                return '';
-                              }
-                            })()}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </motion.div>
                 ))}
               </AnimatePresence>
-            )}
-
-            {!isSearching && filteredMosques.length === 0 && (
-              <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="text-center py-16 px-4"
-              >
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Search size={32} className="text-gray-400" />
-                </div>
-                <h3 className="text-xl font-black text-gray-900 mb-2">{t('No mosques found', language)}</h3>
-                <p className="text-gray-500 text-sm font-medium">{t('Try adjusting your search or filters', language)}</p>
-              </motion.div>
             )}
           </div>
         </PullToRefresh>

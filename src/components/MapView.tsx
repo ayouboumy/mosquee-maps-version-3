@@ -8,6 +8,7 @@ import { Navigation, Clock } from 'lucide-react';
 import { useAppStore, RouteProfile } from '../store/useAppStore';
 import { getDistance } from 'geolib';
 import { getLocalizedName, t } from '../utils/translations';
+import QiblaCompass from './QiblaCompass';
 
 // Fix for Vite environment variables in TS
 interface ImportMetaEnv {
@@ -130,7 +131,7 @@ function MapController({ showNearest, nearestMosques, routingToMosque, selectedM
   return null;
 }
 
-function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey }: { start: [number, number], end: [number, number], isMainRoute?: boolean, routeProfile?: string | RouteProfile, routeKey: string }) {
+function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey }: { start: [number, number], end: [number, number], isMainRoute?: boolean, routeProfile?: string | RouteProfile, routeKey: string, key?: string }) {
   const [positions, setPositions] = useState<[number, number][]>([start, end]);
   const { setRouteInfo } = useAppStore();
 
@@ -385,6 +386,41 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
           selectedMosque={selectedMosque} 
         />
 
+        {/* Selected Mosque Glow Layer */}
+        {selectedMosque && (
+          <Source
+            id="selected-glow-source"
+            type="geojson"
+            data={{
+              type: 'Feature',
+              properties: {},
+              geometry: { type: 'Point', coordinates: [selectedMosque.longitude, selectedMosque.latitude] }
+            }}
+          >
+            <Layer
+              id="selected-glow-layer-inner"
+              type="circle"
+              paint={{
+                'circle-radius': 15,
+                'circle-color': '#10b981',
+                'circle-opacity': 0.8,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff'
+              }}
+            />
+            <Layer
+              id="selected-glow-layer-outer"
+              type="circle"
+              paint={{
+                'circle-radius': 40,
+                'circle-color': '#10b981',
+                'circle-opacity': 0.2,
+                'circle-blur': 1
+              }}
+            />
+          </Source>
+        )}
+
         {isUserLocationValid && (
           <Marker longitude={userLocation.longitude} latitude={userLocation.latitude} anchor="center">
             <UserMarkerHTML />
@@ -456,6 +492,9 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
           );
         })}
       </Map>
+
+      {/* Spiritual & Navigation Overlays */}
+      <QiblaCompass />
 
       <AnimatePresence>
         {showNearest && nearestMosques.length > 0 && !routingToMosque && (
