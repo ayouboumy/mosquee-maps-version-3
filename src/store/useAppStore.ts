@@ -121,7 +121,7 @@ export const useAppStore = create<AppState>()(
       }),
     }),
     {
-      name: 'mosque-finder-v9-absolute', // Changed key to force reset
+      name: 'mosque-finder-v11-pro-nav-final', // Force reset to show Pro-Nav features
       partialize: (state) => ({ 
         favorites: state.favorites, 
         mosques: state.mosques, 

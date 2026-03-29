@@ -586,24 +586,24 @@ export default function MapView({
           </div>
         )}
 
-        {/* 3. TOP-RIGHT: Navigation Hub (Zoom & Compass) */}
+        {/* 3. TOP-RIGHT: Pro Navigation Hub (Zoom & Compass) */}
         {!isNavigating && (
-          <div className={`absolute top-24 ${language === 'ar' ? 'left-4' : 'right-4'} z-[9999] flex flex-col gap-2`}>
+          <div className="absolute top-24 right-4 z-[9999] flex flex-col gap-2">
              <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-1 flex flex-col gap-1 ring-1 ring-black/5">
-                <button onClick={() => handleZoom(1)} className="p-3 hover:bg-gray-100 rounded-xl transition-colors"><Plus size={20} strokeWidth={3} /></button>
+                <button onClick={() => handleZoom(1)} className="p-3 hover:bg-gray-100 rounded-xl transition-colors text-gray-700" title={t("Zoom In", language)}><Plus size={20} strokeWidth={3} /></button>
                 <div className="h-px bg-gray-100 mx-2" />
-                <button onClick={() => handleZoom(-1)} className="p-3 hover:bg-gray-100 rounded-xl transition-colors"><Minus size={20} strokeWidth={3} /></button>
+                <button onClick={() => handleZoom(-1)} className="p-3 hover:bg-gray-100 rounded-xl transition-colors text-gray-700" title={t("Zoom Out", language)}><Minus size={20} strokeWidth={3} /></button>
              </div>
              
              {/* Functional Reset North */}
-             <button onClick={() => mapRef.current?.easeTo({ bearing: 0, duration: 800 })} className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 text-emerald-600 ring-1 ring-black/5">
+             <button onClick={() => mapRef.current?.easeTo({ bearing: 0, duration: 800 })} className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 text-emerald-600 ring-1 ring-black/5 hover:bg-gray-50 transition-colors" title={t("Reset North", language)}>
                 <Compass size={20} />
              </button>
 
              {/* Functional Near Mosque Toggle (RESTORED) */}
              <button 
                onClick={() => setShowNearest?.(!showNearest)}
-               className={`p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 ring-1 ring-black/5 transition-colors ${showNearest ? 'bg-amber-500 text-white border-amber-500' : 'text-amber-600'}`}
+               className={`p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 ring-1 ring-black/5 transition-all hover:scale-105 active:scale-95 ${showNearest ? 'bg-amber-500 text-white border-amber-500 shadow-amber-500/20' : 'text-amber-600'}`}
                title={t("Nearest Mosques", language)}
              >
                 <MapPin size={20} />
@@ -613,10 +613,11 @@ export default function MapView({
 
         {/* 4. BOTTOM-RIGHT: Location FAB */}
         {!isNavigating && (
-          <div className={`absolute bottom-32 ${language === 'ar' ? 'left-4' : 'right-4'} z-[9999]`}>
+          <div className="absolute bottom-32 right-4 z-[9999]">
              <button 
                onClick={handleGeolocate}
-               className={`w-14 h-14 bg-white/95 backdrop-blur-xl rounded-2xl shadow-huge border border-white/50 flex items-center justify-center text-blue-600 transition-all hover:scale-105 active:scale-95 ring-1 ring-black/5 ${isLocating ? 'shadow-blue-200' : ''}`}
+               className={`w-14 h-14 bg-white/95 backdrop-blur-xl rounded-2xl shadow-huge border border-white/50 flex items-center justify-center text-blue-600 transition-all hover:scale-110 active:scale-90 ring-1 ring-black/5 ${isLocating ? 'shadow-blue-200' : ''}`}
+               title={t("My Location", language)}
              >
                 <LocateFixed size={24} className={isLocating ? 'animate-pulse' : ''} />
              </button>
@@ -625,16 +626,18 @@ export default function MapView({
 
         {/* 5. BOTTOM-LEFT: Layers Hub */}
         {!isNavigating && (
-           <div className={`absolute bottom-32 ${language === 'ar' ? 'right-4' : 'left-4'} z-[9999] flex flex-col gap-2`}>
+           <div className="absolute bottom-32 left-4 z-[9999] flex flex-col gap-2">
               <button 
                 onClick={() => setMapStyle(mapStyle === 'street' ? 'satellite' : 'street')}
-                className={`p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 ring-1 ring-black/5 ${mapStyle === 'satellite' ? 'text-emerald-600' : 'text-gray-700'}`}
+                className={`p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 ring-1 ring-black/5 transition-all hover:scale-105 active:scale-95 ${mapStyle === 'satellite' ? 'text-emerald-600' : 'text-gray-700'}`}
+                title={t(mapStyle === 'street' ? 'Satellite' : 'Road Map', language)}
               >
                 <Layers size={20} />
               </button>
               <button 
                 onClick={toggle3D}
-                className={`p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 ring-1 ring-black/5 ${is3D ? 'text-indigo-600' : 'text-gray-700'}`}
+                className={`p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 ring-1 ring-black/5 transition-all hover:scale-105 active:scale-95 ${is3D ? 'text-indigo-600' : 'text-gray-700'}`}
+                title={t("3D Buildings", language)}
               >
                 <Box size={20} />
               </button>
@@ -780,14 +783,7 @@ export default function MapView({
         })}
       </Map>
 
-      {/* Spiritual & Navigation Overlays */}
-      <motion.div 
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="absolute top-24 left-4 z-[10000] flex flex-col items-center gap-2"
-      >
-        <QiblaCompass />
-      </motion.div>
+      {/* Removed Redundant Spiritual Overlay */}
 
       <AnimatePresence>
         {showNearest && nearestMosques.length > 0 && !routingToMosque && (
