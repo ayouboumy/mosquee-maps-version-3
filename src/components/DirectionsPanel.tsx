@@ -38,7 +38,7 @@ function AnimatedCounter({ value, label }: { value: number, label: string }) {
 }
 
 export default function DirectionsPanel() {
-  const { routingToMosque, routeInfo, setRoutingToMosque, language, routeProfile, setRouteProfile } = useAppStore();
+  const { routingToMosque, routeInfo, setRoutingToMosque, language, routeProfile, setRouteProfile, setIsNavigating } = useAppStore();
 
   const handleOpenMaps = () => {
     if (!routingToMosque) return;
@@ -184,21 +184,30 @@ export default function DirectionsPanel() {
                 </div>
 
                 <div className="pl-4">
-                  <button
-                    onClick={handleOpenMaps}
-                    disabled={!routeInfo}
-                    className={cn(
-                      "flex items-center justify-center gap-2 text-white h-[60px] px-8 rounded-full font-bold text-lg transition-all active:scale-95 shadow-lg",
-                      !routeInfo
-                        ? "bg-gray-300 shadow-none"
-                        : routeProfile === 'driving'
-                          ? "bg-blue-600 hover:bg-blue-700 shadow-blue-600/30"
-                          : "btn-primary shadow-emerald-glow"
-                    )}
-                  >
-                    <Navigation size={22} className={cn("fill-current", language === 'ar' ? 'ml-1' : 'mr-1')} />
-                    {t('Start', language)}
-                  </button>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => setIsNavigating(true)}
+                      disabled={!routeInfo}
+                      className={cn(
+                        "flex items-center justify-center gap-2 text-white h-[50px] px-8 rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95 shadow-lg",
+                        !routeInfo
+                          ? "bg-gray-300 shadow-none pointer-events-none opacity-50"
+                          : routeProfile === 'driving'
+                            ? "bg-blue-600 hover:bg-blue-700 shadow-blue-600/30 ring-4 ring-blue-600/10"
+                            : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30 ring-4 ring-emerald-600/10"
+                      )}
+                    >
+                      <Navigation size={18} className="fill-current" />
+                      {t('Start 3D Nav', language)}
+                    </button>
+                    <button
+                      onClick={handleOpenMaps}
+                      disabled={!routeInfo}
+                      className="text-[10px] font-black uppercase text-gray-400 hover:text-gray-600 transition-colors text-center"
+                    >
+                      {t('Open in External Maps', language)}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

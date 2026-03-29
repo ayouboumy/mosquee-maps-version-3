@@ -69,10 +69,18 @@ const DestinationMarkerHTML = () => (
   </div>
 );
 
-const UserMarkerHTML = () => (
+const UserMarkerHTML = ({ heading = 0, isNavigating }: { heading?: number, isNavigating?: boolean }) => (
   <div className="relative flex items-center justify-center z-50">
-    <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow-md relative">
-      <div className="absolute inset-[-8px] rounded-full bg-blue-500/30 animate-ping" />
+    <div className={`w-6 h-6 rounded-full bg-blue-500 border-2 border-white shadow-lg flex items-center justify-center relative transition-transform duration-500 ${isNavigating ? 'scale-110' : ''}`}>
+      {isNavigating ? (
+        <div 
+          className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[12px] border-b-white mb-[2px]" 
+          style={{ transform: `rotate(${heading}deg)` }} 
+        />
+      ) : (
+        <div className="w-2 h-2 rounded-full bg-white" />
+      )}
+      <div className="absolute inset-[-10px] rounded-full bg-blue-500/30 animate-pulse" />
     </div>
   </div>
 );
@@ -241,10 +249,11 @@ export default function MapView({
   isLocating?: boolean;
   setIsLocating?: (val: boolean) => void;
 }) {
-  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle, setMapStyle, setUserLocation } = useAppStore();
+  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle, setMapStyle, setUserLocation, isNavigating, setIsNavigating, routeInfo } = useAppStore();
   
   const mapRef = useRef<any>(null);
   const [is3D, setIs3D] = useState(true);
+  const [navHeading, setNavHeading] = useState(0);
   const [roadDurations, setRoadDurations] = useState<Record<number, number>>({});
   const [roadDistances, setRoadDistances] = useState<Record<number, number>>({});
 
@@ -306,9 +315,27 @@ export default function MapView({
     });
   };
 
-  const resetNorth = () => {
-    mapRef.current?.easeTo({ bearing: 0, duration: 1000 });
-  };
+  // Adaptive 3D Navigation Camera
+  useEffect(() => {
+    if (isNavigating && userLocation && routingToMosque && mapRef.current) {
+      // Calculate heading towards destination
+      const dy = routingToMosque.latitude - userLocation.latitude;
+      const dx = routingToMosque.longitude - userLocation.longitude;
+      const angle = Math.atan2(dx, dy) * (180 / Math.PI);
+      setNavHeading(angle);
+
+      mapRef.current.easeTo({
+        center: [userLocation.longitude, userLocation.latitude],
+        zoom: 17,
+        pitch: 65,
+        bearing: angle,
+        duration: 1500,
+        essential: true
+      });
+    } else if (!isNavigating && mapRef.current) {
+      mapRef.current.easeTo({ pitch: is3D ? 60 : 0, duration: 1000 });
+    }
+  }, [isNavigating, userLocation, routingToMosque, is3D]);
 
   const handleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -444,76 +471,91 @@ export default function MapView({
         style={{ width: '100%', height: '100%' }}
         projection={{ name: 'globe' }}
       >
-        {/* Consolidated Navigation Utility Stack */}
-        {!routingToMosque && (
-          <div className={`absolute top-24 ${language === 'ar' ? 'left-4' : 'right-4'} z-[9999] flex flex-col gap-3`}>
-            {/* Primary Action Group */}
-            <div className="flex flex-col bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 overflow-hidden ring-1 ring-black/5">
-                <button 
-                  onClick={() => handleZoom(1)}
-                  className="p-3 hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100 transition-colors text-gray-700"
-                  title={t("Zoom In", language)}
-                >
-                  <Plus size={20} strokeWidth={3} />
-                </button>
-                <button 
-                  onClick={() => handleZoom(-1)}
-                  className="p-3 hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100 transition-colors text-gray-700"
-                  title={t("Zoom Out", language)}
-                >
-                  <Minus size={20} strokeWidth={3} />
-                </button>
-                <button 
-                  onClick={resetNorth}
-                  className="p-3 hover:bg-gray-50 active:bg-gray-100 transition-colors text-emerald-600"
-                  title={t("Reset North", language)}
-                >
-                  <Compass size={20} />
-                </button>
-            </div>
+        {/* 1. TOP-LEFT: Qibla & Branding */}
+        <div className="absolute top-24 left-4 z-[9999] pointer-events-none">
+          <motion.div 
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="pointer-events-auto"
+          >
+            <QiblaCompass />
+          </motion.div>
+        </div>
 
-            {/* Smart Utilities Group */}
-            <div className="flex flex-col bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 overflow-hidden ring-1 ring-black/5">
-                <button 
-                  onClick={handleGeolocate}
-                  className={`p-3 transition-colors relative ${isLocating ? 'text-blue-600' : 'text-gray-700'} hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100`}
-                  title={t("My Location", language)}
-                >
-                  {isLocating && <div className="absolute inset-2 rounded-full border-2 border-blue-400 animate-ping opacity-75" />}
-                  <LocateFixed size={20} />
-                </button>
-                <button 
-                  onClick={toggle3D}
-                  className={`p-3 transition-colors border-b border-gray-100 ${is3D ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-700 hover:bg-gray-50'}`}
-                  title={t("3D Buildings", language)}
-                >
-                  <Box size={20} />
-                </button>
-                <button 
-                  onClick={() => setShowNearest?.(!showNearest)}
-                  className={`p-3 transition-colors border-b border-gray-100 ${showNearest ? 'text-amber-600 bg-amber-50/50' : 'text-gray-700 hover:bg-gray-50'}`}
-                  title={t("Nearest Mosques", language)}
-                >
-                  <MapPin size={20} />
-                </button>
-                <button 
-                  onClick={() => setMapStyle(mapStyle === 'street' ? 'satellite' : 'street')}
-                  className={`p-3 transition-colors ${mapStyle === 'satellite' ? 'text-emerald-600 bg-emerald-50/50' : 'text-gray-700 hover:bg-gray-50'}`}
-                  title={t(mapStyle === 'street' ? 'Satellite Mode' : 'Street Mode', language)}
-                >
-                  <Layers size={20} />
-                </button>
-            </div>
-
-            {/* Secondary Utilities */}
-            <button 
-              onClick={handleFullscreen}
-              className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700 ring-1 ring-black/5"
-              title={t("Toggle Fullscreen", language)}
+        {/* 2. TOP-CENTER: Nav Instruction Card */}
+        {isNavigating && routingToMosque && (
+          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[10000] w-[90%] max-w-sm">
+            <motion.div 
+              initial={{ y: -50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="bg-white/95 backdrop-blur-2xl rounded-3xl p-4 shadow-2xl border border-white/50 flex items-center gap-4"
             >
-              <Maximize size={20} />
-            </button>
+              <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                <Navigation size={24} />
+              </div>
+              <div className="flex-1 overflow-hidden">
+                 <p className="text-[10px] font-black uppercase text-blue-600 tracking-wider mb-0.5">Navigating To</p>
+                 <h4 className="font-black text-gray-900 truncate">{getLocalizedName(routingToMosque, language)}</h4>
+                 <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
+                    <Clock size={12} />
+                    <span>{Math.round((routeInfo?.duration || 0) / 60)} min</span>
+                    <span>•</span>
+                    <span>{((routeInfo?.distance || 0) / 1000).toFixed(1)} km</span>
+                 </div>
+              </div>
+              <button 
+                onClick={() => setIsNavigating(false)}
+                className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-100 transition-colors"
+                title="End Navigation"
+              >
+                 <Plus size={20} className="rotate-45" />
+              </button>
+            </motion.div>
           </div>
+        )}
+
+        {/* 3. TOP-RIGHT: Navigation Hub (Zoom & Compass) */}
+        {!isNavigating && !routingToMosque && (
+          <div className={`absolute top-24 ${language === 'ar' ? 'left-4' : 'right-4'} z-[9999] flex flex-col gap-2`}>
+             <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-1 flex flex-col gap-1 ring-1 ring-black/5">
+                <button onClick={() => handleZoom(1)} className="p-3 hover:bg-gray-100 rounded-xl transition-colors"><Plus size={20} strokeWidth={3} /></button>
+                <div className="h-px bg-gray-100 mx-2" />
+                <button onClick={() => handleZoom(-1)} className="p-3 hover:bg-gray-100 rounded-xl transition-colors"><Minus size={20} strokeWidth={3} /></button>
+             </div>
+             <button onClick={() => mapRef.current?.easeTo({ bearing: 0, duration: 800 })} className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 text-emerald-600 ring-1 ring-black/5">
+                <Compass size={20} />
+             </button>
+          </div>
+        )}
+
+        {/* 4. BOTTOM-RIGHT: Location FAB */}
+        {!isNavigating && (
+          <div className={`absolute bottom-32 ${language === 'ar' ? 'left-4' : 'right-4'} z-[9999]`}>
+             <button 
+               onClick={handleGeolocate}
+               className={`w-14 h-14 bg-white/95 backdrop-blur-xl rounded-2xl shadow-huge border border-white/50 flex items-center justify-center text-blue-600 transition-all hover:scale-105 active:scale-95 ring-1 ring-black/5 ${isLocating ? 'shadow-blue-200' : ''}`}
+             >
+                <LocateFixed size={24} className={isLocating ? 'animate-pulse' : ''} />
+             </button>
+          </div>
+        )}
+
+        {/* 5. BOTTOM-LEFT: Layers Hub */}
+        {!isNavigating && (
+           <div className={`absolute bottom-32 ${language === 'ar' ? 'right-4' : 'left-4'} z-[9999] flex flex-col gap-2`}>
+              <button 
+                onClick={() => setMapStyle(mapStyle === 'street' ? 'satellite' : 'street')}
+                className={`p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 ring-1 ring-black/5 ${mapStyle === 'satellite' ? 'text-emerald-600' : 'text-gray-700'}`}
+              >
+                <Layers size={20} />
+              </button>
+              <button 
+                onClick={toggle3D}
+                className={`p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 ring-1 ring-black/5 ${is3D ? 'text-indigo-600' : 'text-gray-700'}`}
+              >
+                <Box size={20} />
+              </button>
+           </div>
         )}
 
         {/* 3D Buildings Layer (Classic Style Implementation) */}
@@ -585,7 +627,7 @@ export default function MapView({
 
         {isUserLocationValid && (
           <Marker longitude={userLocation.longitude} latitude={userLocation.latitude} anchor="center">
-            <UserMarkerHTML />
+            <UserMarkerHTML heading={navHeading} isNavigating={isNavigating} />
           </Marker>
         )}
 

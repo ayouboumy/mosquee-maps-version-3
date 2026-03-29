@@ -13,7 +13,7 @@ import DirectionsPanel from './components/DirectionsPanel';
 import PullToRefresh from './components/PullToRefresh';
 
 export default function App() {
-  const { activeTab, setUserLocation, language, routingToMosque, refreshLocation, mosques, mapStyle, setMapStyle } = useAppStore();
+  const { activeTab, setUserLocation, language, routingToMosque, refreshLocation, mosques, mapStyle, setMapStyle, isNavigating } = useAppStore();
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [showNearest, setShowNearest] = useState(false);
@@ -72,8 +72,8 @@ export default function App() {
                 </div>
               )}
 
-              <BottomSheet />
-              <DirectionsPanel />
+              {!isNavigating && <BottomSheet />}
+              {!isNavigating && <DirectionsPanel />}
             </PullToRefresh>
           )}
 
@@ -84,7 +84,7 @@ export default function App() {
           {activeTab === 'settings' && <SettingsScreen />}
         </div>
 
-        {!routingToMosque && <BottomNav />}
+        {!routingToMosque && !isNavigating && <BottomNav />}
       </div>
     </div>
   );

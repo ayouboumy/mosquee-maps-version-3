@@ -22,6 +22,7 @@ interface AppState {
   routeInfo: RouteInfo | null;
   routeProfile: RouteProfile;
   userLocation: { latitude: number; longitude: number } | null;
+  isNavigating: boolean;
   language: Language;
   dynamicTranslations: Record<string, Record<Language, string>>;
   selectedCommune: string | null;
@@ -41,6 +42,7 @@ interface AppState {
   setSelectedCommune: (commune: string | null) => void;
   setMapStyle: (style: MapStyle) => void;
   setMapTheme: (theme: MapTheme) => void;
+  setIsNavigating: (val: boolean) => void;
   refreshLocation: () => Promise<void>;
 }
 
@@ -55,6 +57,7 @@ export const useAppStore = create<AppState>()(
       routeInfo: null,
       routeProfile: 'foot',
       userLocation: null,
+      isNavigating: false,
       language: 'ar', // Default to Arabic
       dynamicTranslations: {},
       selectedCommune: null,
@@ -80,7 +83,8 @@ export const useAppStore = create<AppState>()(
       })),
       setSelectedCommune: (commune) => set({ selectedCommune: commune }),
       setMapStyle: (style) => set({ mapStyle: style }),
-      setMapTheme: (theme) => set({ mapTheme: theme }),
+      setMapTheme: (theme: MapTheme) => set({ mapTheme: theme }),
+      setIsNavigating: (val) => set({ isNavigating: val }),
       refreshLocation: () => new Promise((resolve) => {
         if ('geolocation' in navigator) {
           navigator.geolocation.getCurrentPosition(
