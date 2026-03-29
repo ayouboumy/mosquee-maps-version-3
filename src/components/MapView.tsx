@@ -5,11 +5,19 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import useSupercluster from 'use-supercluster';
 import { motion, AnimatePresence } from 'motion/react';
 import { Navigation, Clock } from 'lucide-react';
-import { useAppStore } from '../store/useAppStore';
+import { useAppStore, RouteProfile } from '../store/useAppStore';
 import { getDistance } from 'geolib';
 import { getLocalizedName, t } from '../utils/translations';
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoiYXlvdWJvdW15IiwiYSI6ImNtbmF5dDVzZTBuZzEyb3F5cDlpY3g1aTcifQ.1VyhjdZII-HnNd8-SdfgRg';
+// Fix for Vite environment variables in TS
+interface ImportMetaEnv {
+  readonly VITE_MAPBOX_TOKEN: string;
+}
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
+const MAPBOX_TOKEN = (import.meta as any).env.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoiYXlvdWJvdW15IiwiYSI6ImNtbmF5dDVzZTBuZzEyb3F5cDlpY3g1aTcifQ.1VyhjdZII-HnNd8-SdfgRg';
 mapboxgl.accessToken = MAPBOX_TOKEN;
 
 // Custom HTML Markers using Divs (matching Leaflet style)
@@ -67,7 +75,7 @@ const UserMarkerHTML = () => (
   </div>
 );
 
-function MapController({ showNearest, nearestMosques, routingToMosque, selectedMosque, viewport, setViewport }: any) {
+function MapController({ showNearest, nearestMosques, routingToMosque, selectedMosque }: any) {
   const { userLocation } = useAppStore();
   const { current: map } = useMap();
 
@@ -87,7 +95,6 @@ function MapController({ showNearest, nearestMosques, routingToMosque, selectedM
           Math.max(userLocation.latitude, routingToMosque.latitude)
         ];
         map.fitBounds(bounds, { padding: 80, duration: 1000 });
-        // Set pitch for better 3D navigation feel
         map.easeTo({ pitch: 45, bearing: 0, duration: 1000 });
       }
     } else if (selectedMosque) {
@@ -123,7 +130,7 @@ function MapController({ showNearest, nearestMosques, routingToMosque, selectedM
   return null;
 }
 
-function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey }: { start: [number, number], end: [number, number], isMainRoute?: boolean, routeProfile?: string, routeKey: string }) {
+function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey }: { start: [number, number], end: [number, number], isMainRoute?: boolean, routeProfile?: string | RouteProfile, routeKey: string }) {
   const [positions, setPositions] = useState<[number, number][]>([start, end]);
   const { setRouteInfo } = useAppStore();
 
@@ -160,14 +167,10 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
   }, [isMainRoute, setRouteInfo]);
 
   const isDriving = routeProfile === 'driving';
-  // Litinear Premium Colors (Vibrant Neon)
   const innerColor = isMainRoute 
     ? (isDriving ? '#3b82f6' : '#10b981') 
     : '#94a3b8';
-  const glowColor = isMainRoute 
-    ? (isDriving ? '#3b82f644' : '#10b98144') 
-    : 'transparent';
-    
+
   const validPositions = positions.filter(p => p && typeof p[0] === 'number' && !isNaN(p[0]) && typeof p[1] === 'number' && !isNaN(p[1]));
   if (validPositions.length < 2) return null;
 
@@ -181,49 +184,44 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
   };
 
   return (
-    <>
-      <Source id={`route-source-${routeKey}`} type="geojson" data={geojson}>
-        {/* Glow Layer */}
-        {isMainRoute && (
-          <Layer 
-            id={`route-glow-${routeKey}`} 
-            type="line" 
-            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-            paint={{ 
-              'line-color': innerColor, 
-              'line-width': 12, 
-              'line-blur': 8,
-              'line-opacity': 0.6
-            }} 
-          />
-        )}
-        {/* Main Line */}
+    <Source id={`route-source-${routeKey}`} type="geojson" data={geojson}>
+      {isMainRoute && (
         <Layer 
-          id={`route-inner-${routeKey}`} 
+          id={`route-glow-${routeKey}`} 
           type="line" 
           layout={{ 'line-cap': 'round', 'line-join': 'round' }}
           paint={{ 
             'line-color': innerColor, 
-            'line-width': isMainRoute ? 6 : 4, 
-            'line-opacity': isMainRoute ? 1 : 0.6 
+            'line-width': 12, 
+            'line-blur': 8,
+            'line-opacity': 0.6
           }} 
         />
-        {/* Dash/Directional UI for Main Route */}
-        {isMainRoute && (
-          <Layer 
-            id={`route-dash-${routeKey}`} 
-            type="line" 
-            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-            paint={{ 
-              'line-color': '#ffffff', 
-              'line-width': 2, 
-              'line-opacity': 0.8, 
-              'line-dasharray': [1, 2] 
-            }} 
-          />
-        )}
-      </Source>
-    </>
+      )}
+      <Layer 
+        id={`route-inner-${routeKey}`} 
+        type="line" 
+        layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+        paint={{ 
+          'line-color': innerColor, 
+          'line-width': isMainRoute ? 6 : 4, 
+          'line-opacity': isMainRoute ? 1 : 0.6 
+        }} 
+      />
+      {isMainRoute && (
+        <Layer 
+          id={`route-dash-${routeKey}`} 
+          type="line" 
+          layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+          paint={{ 
+            'line-color': '#ffffff', 
+            'line-width': 2, 
+            'line-opacity': 0.8, 
+            'line-dasharray': [1, 2] 
+          }} 
+        />
+      )}
+    </Source>
   );
 }
 
@@ -232,7 +230,6 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
   
   const mapRef = useRef<any>(null);
   const [roadDurations, setRoadDurations] = useState<Record<number, number>>({});
-  const [isMatrixLoading, setIsMatrixLoading] = useState(false);
 
   const isUserLocationValid = userLocation && 
     typeof userLocation.latitude === 'number' && !isNaN(userLocation.latitude) &&
@@ -246,6 +243,36 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
     bearing: 0
   });
 
+  const currentTheme = useMemo(() => {
+    if (mapTheme === 'auto') {
+      const hour = new Date().getHours();
+      return (hour >= 19 || hour <= 6) ? 'dark' : 'light';
+    }
+    return mapTheme;
+  }, [mapTheme]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current.getMap();
+    if (!map) return;
+
+    const updateConfig = () => {
+      try {
+        if (map.getImport('basemap')) {
+          map.setConfigProperty('basemap', 'theme', currentTheme);
+        }
+      } catch (e) {
+        console.warn("Could not set map config:", e);
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      updateConfig();
+    } else {
+      map.once('style.load', updateConfig);
+    }
+  }, [currentTheme]);
+
   const filteredByCommune = useMemo(() => {
     return mosques.filter(m => 
       typeof m.latitude === 'number' && !isNaN(m.latitude) && 
@@ -253,14 +280,11 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
     );
   }, [mosques, selectedCommune]);
 
-  // Mapbox Matrix API for Ultra-Accuracy
   useEffect(() => {
     if (!isUserLocationValid || filteredByCommune.length === 0 || !showNearest) return;
 
     const fetchMatrix = async () => {
-      setIsMatrixLoading(true);
       try {
-        // Step 1: Find 25 nearest candidates by straight line (Distance filter)
         const candidates = filteredByCommune
           .map(m => ({ 
             ...m, 
@@ -270,11 +294,10 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
             ) 
           }))
           .sort((a, b) => a.straightDist - b.straightDist)
-          .slice(0, 24); // Limit to 24 + origin = 25 for Matrix API free tier limits
+          .slice(0, 24);
 
         if (candidates.length === 0) return;
 
-        // Step 2: Build Matrix Request
         const coordinates = [
           `${userLocation.longitude},${userLocation.latitude}`,
           ...candidates.map(c => `${c.longitude},${c.latitude}`)
@@ -298,8 +321,6 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
         }
       } catch (e) {
         console.error("Matrix API Error:", e);
-      } finally {
-        setIsMatrixLoading(false);
       }
     };
 
@@ -321,7 +342,6 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
 
   const displayedMosques = showNearest ? nearestMosques : filteredByCommune;
 
-  // Supercluster setup
   const points = useMemo(() => {
     return displayedMosques.map(m => ({
       type: "Feature",
@@ -338,17 +358,6 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
     zoom: viewState.zoom,
     options: { radius: 75, maxZoom: 20 }
   });
-
-  // Calculate theme light color based on mapTheme
-  const getMapTheme = () => {
-    if (mapTheme === 'auto') {
-      const hour = new Date().getHours();
-      return (hour >= 19 || hour <= 6) ? 'dark' : 'light';
-    }
-    return mapTheme;
-  };
-
-  const currentTheme = getMapTheme();
 
   return (
     <div className="absolute inset-0 z-0 bg-gray-900" style={{ isolation: 'isolate' }}>
@@ -376,14 +385,12 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
           selectedMosque={selectedMosque} 
         />
 
-        {/* User Location */}
         {isUserLocationValid && (
           <Marker longitude={userLocation.longitude} latitude={userLocation.latitude} anchor="center">
             <UserMarkerHTML />
           </Marker>
         )}
 
-        {/* Main Routing Line */}
         {routingToMosque && isUserLocationValid && (
           <RouteLine
             routeKey={`${routingToMosque.id}-${routeProfile}-main`}
@@ -394,18 +401,16 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
           />
         )}
 
-        {/* Alternative Routes for Nearest */}
         {showNearest && isUserLocationValid && !routingToMosque && nearestMosques.map((mosque) => (
           <RouteLine
             key={`alt-${mosque.id}`}
             routeKey={`${mosque.id}-${routeProfile}-alt`}
             start={[userLocation.longitude, userLocation.latitude]}
-            end={[mosque.longitude, mosque.latitude]}
+            end={[Number(mosque.longitude), Number(mosque.latitude)]}
             routeProfile={routeProfile}
           />
         ))}
 
-        {/* Clustering and Markers */}
         {clusters.map(cluster => {
           const [longitude, latitude] = cluster.geometry.coordinates;
           const { cluster: isCluster, point_count: pointCount } = cluster.properties;
@@ -450,25 +455,8 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
             </Marker>
           );
         })}
-
-        {/* Standard Style Configuration - Sync with app state */}
-        <Layer
-          id="standard-config"
-          type="background"
-          layout={{ visibility: 'none' }}
-          // @ts-ignore - mapbox-gl-js custom properties for Standard Style
-          metadata={{
-             'mapbox:config': {
-                'theme': currentTheme,
-                'lightPreset': 'day',
-                'show3dObjects': true,
-                'showTerrain': true
-             }
-          }}
-        />
       </Map>
 
-      {/* Near Mosques Carousel */}
       <AnimatePresence>
         {showNearest && nearestMosques.length > 0 && !routingToMosque && (
           <motion.div 
@@ -484,7 +472,13 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
                 className={`flex flex-col text-left bg-white/95 backdrop-blur-xl rounded-[24px] p-3 shadow-2xl w-[260px] border-2 transition-all active:scale-95 ${selectedMosque?.id === mosque.id ? 'border-emerald-500 ring-4 ring-emerald-500/10' : 'border-transparent'}`}
               >
                 <div className="relative w-full h-24 rounded-[16px] overflow-hidden mb-3">
-                  <img src={mosque.image} className="w-full h-full object-cover" alt="" />
+                  {mosque.image ? (
+                    <img src={mosque.image} className="w-full h-full object-cover" alt="" />
+                  ) : (
+                    <div className="w-full h-full bg-emerald-100 flex items-center justify-center">
+                      <Navigation className="text-emerald-500 opacity-20" size={32} />
+                    </div>
+                  )}
                   <div className="absolute top-2 left-2 bg-emerald-600/90 backdrop-blur-md rounded-lg px-2 py-1 flex items-center gap-1.5">
                     <span className="text-white text-[10px] font-black uppercase">#{i + 1} {t('Nearest', language)}</span>
                   </div>
@@ -493,7 +487,7 @@ export default function MapView({ showNearest }: { showNearest?: boolean }) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1 text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-lg">
                     <Clock size={12} />
-                    {Math.round(mosque.duration / 60)} min
+                    {roadDurations[mosque.id] ? Math.round(roadDurations[mosque.id] / 60) : 0} min
                   </div>
                   <span className="text-[10px] font-black text-gray-400 bg-gray-100 px-2 py-1 rounded-full uppercase truncate max-w-[100px]">{t(mosque.type, language)}</span>
                 </div>

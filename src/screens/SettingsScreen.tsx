@@ -1,5 +1,5 @@
+import React, { useRef, useState, ChangeEvent, useMemo, useEffect } from 'react';
 import { Upload, CheckCircle2, AlertCircle, Database, FileSpreadsheet, Globe, Loader2, MapPin, Footprints, Car, ChevronDown, Sun, Moon, Monitor } from 'lucide-react';
-import { useRef, useState, ChangeEvent, useMemo } from 'react';
 import { useAppStore, Language } from '../store/useAppStore';
 import * as XLSX from 'xlsx';
 import { t } from '../utils/translations';
