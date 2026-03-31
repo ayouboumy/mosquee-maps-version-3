@@ -24,6 +24,7 @@ interface AppState {
   userLocation: { latitude: number; longitude: number } | null;
   isNavigating: boolean;
   navSteps: any[];
+  routeGeometry: [number, number][];
   currentStepIndex: number;
   lastSpokenStepIndex: number;
   language: Language;
@@ -48,6 +49,7 @@ interface AppState {
   setMapTheme: (theme: MapTheme) => void;
   setIsNavigating: (val: boolean) => void;
   setNavSteps: (steps: any[]) => void;
+  setRouteGeometry: (geometry: [number, number][]) => void;
   setCurrentStepIndex: (idx: number) => void;
   setLastSpokenStepIndex: (idx: number) => void;
   setIsSimulating: (val: boolean) => void;
@@ -67,6 +69,7 @@ export const useAppStore = create<AppState>()(
       userLocation: null,
       isNavigating: false,
       navSteps: [],
+      routeGeometry: [],
       currentStepIndex: 0,
       lastSpokenStepIndex: -1,
       language: 'ar', // Default to Arabic
@@ -98,6 +101,7 @@ export const useAppStore = create<AppState>()(
       setMapTheme: (theme: MapTheme) => set({ mapTheme: theme }),
       setIsNavigating: (val) => set({ isNavigating: val, currentStepIndex: 0, lastSpokenStepIndex: -1 }),
       setNavSteps: (steps) => set({ navSteps: steps }),
+      setRouteGeometry: (geometry) => set({ routeGeometry: geometry }),
       setCurrentStepIndex: (idx) => set({ currentStepIndex: idx }),
       setLastSpokenStepIndex: (idx) => set({ lastSpokenStepIndex: idx }),
       setIsSimulating: (val) => set({ isSimulating: val }),

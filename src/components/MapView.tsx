@@ -183,6 +183,7 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
           if (isMainRoute) {
             setRouteInfo({ distance: data.distance, duration: data.duration });
             setNavSteps(data.steps);
+            useAppStore.getState().setRouteGeometry(data.geometry.coordinates);
           }
         }
       } catch (error) {
@@ -267,7 +268,7 @@ export default function MapView({
   isLocating?: boolean;
   setIsLocating?: (val: boolean) => void;
 }) {
-  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle, setMapStyle, setUserLocation, isNavigating, setIsNavigating, routeInfo, navSteps, currentStepIndex, setCurrentStepIndex, lastSpokenStepIndex, setLastSpokenStepIndex, isSimulating, setIsSimulating } = useAppStore();
+  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle, setMapStyle, setUserLocation, isNavigating, setIsNavigating, routeInfo, navSteps, routeGeometry, currentStepIndex, setCurrentStepIndex, lastSpokenStepIndex, setLastSpokenStepIndex, isSimulating, setIsSimulating } = useAppStore();
   
   const mapRef = useRef<any>(null);
   const [is3D, setIs3D] = useState(true);
@@ -333,12 +334,30 @@ export default function MapView({
     });
   };
 
-  // Adaptive 3D Navigation Camera & Simulation Logic
+  // Adaptive 3D Navigation Camera & Geometry Simulation Logic
+  const simIndexRef = useRef(0);
+  
   useEffect(() => {
     let simulationTimer: any;
+    const { routeGeometry } = useAppStore.getState();
     
     if (isNavigating && userLocation && routingToMosque && mapRef.current) {
-      // 1. Camera Logic
+      // 1. Dynamic Camera Logic (Auto-Zoom & Auto-Pitch)
+      const currentStep = navSteps[currentStepIndex];
+      let targetZoom = 17.5;
+      let targetPitch = 70;
+
+      if (currentStep && currentStep.maneuver) {
+        const distToManeuver = getDistance(
+          { latitude: userLocation.latitude, longitude: userLocation.longitude },
+          { latitude: currentStep.maneuver.location[1], longitude: currentStep.maneuver.location[0] }
+        );
+        
+        // Auto-Zoom: Zoom in when approaching a turn
+        if (distToManeuver < 50) targetZoom = 19;
+        else if (distToManeuver < 150) targetZoom = 18.5;
+      }
+
       const dy = routingToMosque.latitude - userLocation.latitude;
       const dx = routingToMosque.longitude - userLocation.longitude;
       const angle = Math.atan2(dx, dy) * (180 / Math.PI);
@@ -346,39 +365,47 @@ export default function MapView({
 
       mapRef.current.easeTo({
         center: [userLocation.longitude, userLocation.latitude],
-        zoom: 17.5, // Slightly closer for 3D effect
-        pitch: 70,  // Deeper 3D pitch as requested
+        zoom: targetZoom,
+        pitch: targetPitch,
         bearing: angle,
-        duration: 1000,
+        duration: isSimulating ? 200 : 1000, // Faster updates during simulation
         essential: true
       });
 
-      // 2. Simulation Mode (Refined for smoothness)
-      if (isSimulating && navSteps.length > 0) {
-        let step = currentStepIndex;
+      // 2. High-Fidelity Geometry Simulation Mode
+      if (isSimulating && routeGeometry.length > 0) {
         simulationTimer = setInterval(() => {
-          if (step < navSteps.length - 1) {
-            step++;
-            const nextPos = navSteps[step].maneuver.location;
+          if (simIndexRef.current < routeGeometry.length - 1) {
+            simIndexRef.current++;
+            const nextPos = routeGeometry[simIndexRef.current];
             setUserLocation({ 
               longitude: nextPos[0], 
               latitude: nextPos[1] 
             });
-            setCurrentStepIndex(step);
+            
+            // Sync with nav steps if we passed a maneuver point
+            const currentPos = { latitude: nextPos[1], longitude: nextPos[0] };
+            const nextStep = navSteps[currentStepIndex];
+            if (nextStep && nextStep.maneuver) {
+               const dist = getDistance(currentPos, { latitude: nextStep.maneuver.location[1], longitude: nextStep.maneuver.location[0] });
+               if (dist < 10 && currentStepIndex < navSteps.length - 1) {
+                 setCurrentStepIndex(currentStepIndex + 1);
+               }
+            }
           } else {
             setIsSimulating(false);
             clearInterval(simulationTimer);
           }
-        }, 400); // 400ms for a more dynamic "driving" feel
+        }, 150); // Fast interval for geometry-following smoothness
       }
 
-      // 3. Step-by-Step Guidance Logic (Real-time or Sim)
+      // 3. Step-by-Step Guidance Logic (Voice)
       if (navSteps.length > 0) {
-        const currentStep = navSteps[currentStepIndex];
-        if (currentStep && currentStep.maneuver) {
+        const step = navSteps[currentStepIndex];
+        if (step && step.maneuver) {
           const distToCurrent = getDistance(
             { latitude: userLocation.latitude, longitude: userLocation.longitude },
-            { latitude: currentStep.maneuver.location[1], longitude: currentStep.maneuver.location[0] }
+            { latitude: step.maneuver.location[1], longitude: step.maneuver.location[0] }
           );
 
           if (distToCurrent < 20 && currentStepIndex < navSteps.length - 1) {
@@ -386,16 +413,16 @@ export default function MapView({
           }
 
           if (distToCurrent < 100 && lastSpokenStepIndex !== currentStepIndex) {
-            speak(currentStep.maneuver.instruction, language);
+            speak(step.maneuver.instruction, language);
             setLastSpokenStepIndex(currentStepIndex);
           }
         }
 
-        const distToDestination = getDistance(
+        const distToDest = getDistance(
           { latitude: userLocation.latitude, longitude: userLocation.longitude },
           { latitude: routingToMosque.latitude, longitude: routingToMosque.longitude }
         );
-        if (distToDestination < 20 && lastSpokenStepIndex !== 9999) {
+        if (distToDest < 20 && lastSpokenStepIndex !== 9999) {
           speak(t("You have arrived at your destination", language), language);
           setLastSpokenStepIndex(9999);
           setIsSimulating(false);
@@ -405,10 +432,11 @@ export default function MapView({
     } else if (!isNavigating && mapRef.current) {
       mapRef.current.easeTo({ pitch: is3D ? 60 : 0, duration: 1000 });
       setIsSimulating(false);
+      simIndexRef.current = 0;
     }
     
     return () => clearInterval(simulationTimer);
-  }, [isNavigating, userLocation, routingToMosque, is3D, navSteps, currentStepIndex, lastSpokenStepIndex, isSimulating]);
+  }, [isNavigating, userLocation, routingToMosque, is3D, navSteps, routeGeometry, currentStepIndex, lastSpokenStepIndex, isSimulating]);
 
   const handleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -545,7 +573,19 @@ export default function MapView({
         style={{ width: '100%', height: '100%' }}
         projection={{ name: 'globe' }}
         terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
+        fog={{ color: currentTheme === 'dark' ? '#0f172a' : '#f8fafc', range: [0.5, 10] }}
       >
+        
+        {/* Atmosphere & Sky Layer for Depth */}
+        <Layer
+          id="sky"
+          type="sky"
+          paint={{
+            'sky-type': 'atmosphere',
+            'sky-atmosphere-sun': [0.0, 0.0],
+            'sky-atmosphere-sun-intensity': 15
+          }}
+        />
         {/* 1. TOP-LEFT: Qibla & Branding */}
         <div className="absolute top-24 left-4 z-[9999] pointer-events-none">
           <motion.div 
@@ -580,8 +620,14 @@ export default function MapView({
                    {navSteps[currentStepIndex] ? t("Next Maneuver", language) : t("Navigating To", language)}
                  </p>
                  <h4 className="font-black text-gray-900 truncate leading-tight">
-                   {navSteps[currentStepIndex] ? navSteps[currentStepIndex].maneuver.instruction : getLocalizedName(routingToMosque, language)}
+                    {navSteps[currentStepIndex] ? navSteps[currentStepIndex].maneuver.instruction : getLocalizedName(routingToMosque, language)}
                  </h4>
+                 {isSimulating && (
+                    <div className="flex items-center gap-1 mt-0.5 animate-fade-up">
+                      <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                      <span className="text-[10px] font-black text-amber-600 uppercase tracking-tighter">Simulation Active</span>
+                    </div>
+                 )}
                  <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mt-0.5">
                     <Volume2 size={12} className="text-emerald-500" />
                     <span>{Math.round((routeInfo?.duration || 0) / 60)} min</span>
@@ -680,11 +726,12 @@ export default function MapView({
             type="fill-extrusion"
             minzoom={15}
             paint={{
-              'fill-extrusion-color': currentTheme === 'dark' ? '#1e293b' : '#f1f5f9',
+              'fill-extrusion-color': '#cbd5e1', // Realistic concrete grey
               'fill-extrusion-height': ['get', 'height'],
               'fill-extrusion-base': ['get', 'min_height'],
-              'fill-extrusion-opacity': 0.9,
-              'fill-extrusion-ambient-occlusion-intensity': 0.5
+              'fill-extrusion-opacity': 1.0, // Solid concrete look
+              'fill-extrusion-ambient-occlusion-intensity': 0.8, // Enhanced realistic shading
+              'fill-extrusion-ambient-occlusion-radius': 5
             }}
           />
         )}
