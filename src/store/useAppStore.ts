@@ -31,6 +31,7 @@ interface AppState {
   selectedCommune: string | null;
   mapStyle: MapStyle;
   mapTheme: MapTheme;
+  isSimulating: boolean;
   
   toggleFavorite: (id: number) => void;
   setActiveTab: (tab: TabType) => void;
@@ -49,6 +50,7 @@ interface AppState {
   setNavSteps: (steps: any[]) => void;
   setCurrentStepIndex: (idx: number) => void;
   setLastSpokenStepIndex: (idx: number) => void;
+  setIsSimulating: (val: boolean) => void;
   refreshLocation: () => Promise<void>;
 }
 
@@ -72,6 +74,7 @@ export const useAppStore = create<AppState>()(
       selectedCommune: null,
       mapStyle: 'street',
       mapTheme: 'dark', // Hard-coded default for Dark Mode
+      isSimulating: false,
 
       toggleFavorite: (id) =>
         set((state) => ({
@@ -97,6 +100,7 @@ export const useAppStore = create<AppState>()(
       setNavSteps: (steps) => set({ navSteps: steps }),
       setCurrentStepIndex: (idx) => set({ currentStepIndex: idx }),
       setLastSpokenStepIndex: (idx) => set({ lastSpokenStepIndex: idx }),
+      setIsSimulating: (val) => set({ isSimulating: val }),
       refreshLocation: () => new Promise((resolve) => {
         if ('geolocation' in navigator) {
           navigator.geolocation.getCurrentPosition(

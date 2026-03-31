@@ -10,6 +10,8 @@ import { useAppStore, RouteProfile } from '../store/useAppStore';
 import { getDistance } from 'geolib';
 import { getLocalizedName, t } from '../utils/translations';
 import QiblaCompass from './QiblaCompass';
+import { getCachedRoute } from '../lib/routeService';
+import * as turf from '@turf/turf';
 
 // Fix for Vite environment variables in TS
 interface ImportMetaEnv {
@@ -174,24 +176,13 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
     const fetchRoute = async () => {
       try {
         const profile = routeProfile === 'foot' ? 'walking' : 'driving';
-        // ADDED steps=true and banner_instructions=true for Pro Navigation
-        const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${start[0]},${start[1]};${end[0]},${end[1]}?geometries=geojson&overview=full&steps=true&banner_instructions=true&access_token=${MAPBOX_TOKEN}`;
+        const data = await getCachedRoute(start, end, profile);
         
-        const response = await fetch(url);
-        const data = await response.json();
-        if (isMounted && data.routes && data.routes.length > 0) {
-          const routes = [...data.routes].sort((a, b) => a.distance - b.distance);
-          const shortestRoute = routes[0];
-          
-          if (shortestRoute.geometry) {
-            setPositions(shortestRoute.geometry.coordinates);
-            if (isMainRoute) {
-              setRouteInfo({ distance: shortestRoute.distance, duration: shortestRoute.duration });
-              // Extract steps for turn-by-turn guidance
-              if (shortestRoute.legs && shortestRoute.legs[0].steps) {
-                setNavSteps(shortestRoute.legs[0].steps);
-              }
-            }
+        if (isMounted && data) {
+          setPositions(data.geometry.coordinates);
+          if (isMainRoute) {
+            setRouteInfo({ distance: data.distance, duration: data.duration });
+            setNavSteps(data.steps);
           }
         }
       } catch (error) {
@@ -200,7 +191,7 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
     };
     fetchRoute();
     return () => { isMounted = false; };
-  }, [start[0], start[1], end[0], end[1], isMainRoute, setRouteInfo, routeProfile]);
+  }, [start[0], start[1], end[0], end[1], isMainRoute, setRouteInfo, routeProfile, setNavSteps]);
 
   useEffect(() => {
     return () => { if (isMainRoute) setRouteInfo(null); };
@@ -276,7 +267,7 @@ export default function MapView({
   isLocating?: boolean;
   setIsLocating?: (val: boolean) => void;
 }) {
-  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle, setMapStyle, setUserLocation, isNavigating, setIsNavigating, routeInfo, navSteps, currentStepIndex, setCurrentStepIndex, lastSpokenStepIndex, setLastSpokenStepIndex } = useAppStore();
+  const { mosques, userLocation, selectedMosque, setSelectedMosque, language, routingToMosque, setRoutingToMosque, routeProfile, selectedCommune, mapTheme, mapStyle, setMapStyle, setUserLocation, isNavigating, setIsNavigating, routeInfo, navSteps, currentStepIndex, setCurrentStepIndex, lastSpokenStepIndex, setLastSpokenStepIndex, isSimulating, setIsSimulating } = useAppStore();
   
   const mapRef = useRef<any>(null);
   const [is3D, setIs3D] = useState(true);
@@ -342,8 +333,10 @@ export default function MapView({
     });
   };
 
-  // Adaptive 3D Navigation Camera & Live Guidance
+  // Adaptive 3D Navigation Camera & Simulation Logic
   useEffect(() => {
+    let simulationTimer: any;
+    
     if (isNavigating && userLocation && routingToMosque && mapRef.current) {
       // 1. Camera Logic
       const dy = routingToMosque.latitude - userLocation.latitude;
@@ -353,16 +346,34 @@ export default function MapView({
 
       mapRef.current.easeTo({
         center: [userLocation.longitude, userLocation.latitude],
-        zoom: 17,
-        pitch: 65,
+        zoom: 17.5, // Slightly closer for 3D effect
+        pitch: 70,  // Deeper 3D pitch as requested
         bearing: angle,
-        duration: 1500,
+        duration: 1000,
         essential: true
       });
 
-      // 2. Step-by-Step Guidance Logic
+      // 2. Simulation Mode (Refined for smoothness)
+      if (isSimulating && navSteps.length > 0) {
+        let step = currentStepIndex;
+        simulationTimer = setInterval(() => {
+          if (step < navSteps.length - 1) {
+            step++;
+            const nextPos = navSteps[step].maneuver.location;
+            setUserLocation({ 
+              longitude: nextPos[0], 
+              latitude: nextPos[1] 
+            });
+            setCurrentStepIndex(step);
+          } else {
+            setIsSimulating(false);
+            clearInterval(simulationTimer);
+          }
+        }, 400); // 400ms for a more dynamic "driving" feel
+      }
+
+      // 3. Step-by-Step Guidance Logic (Real-time or Sim)
       if (navSteps.length > 0) {
-        // Find current step based on distance
         const currentStep = navSteps[currentStepIndex];
         if (currentStep && currentStep.maneuver) {
           const distToCurrent = getDistance(
@@ -370,19 +381,16 @@ export default function MapView({
             { latitude: currentStep.maneuver.location[1], longitude: currentStep.maneuver.location[0] }
           );
 
-          // If we passed the step (within 20m), advance to next
           if (distToCurrent < 20 && currentStepIndex < navSteps.length - 1) {
             setCurrentStepIndex(currentStepIndex + 1);
           }
 
-          // Voice Guidance Trigger (speak if approaching step)
           if (distToCurrent < 100 && lastSpokenStepIndex !== currentStepIndex) {
             speak(currentStep.maneuver.instruction, language);
             setLastSpokenStepIndex(currentStepIndex);
           }
         }
 
-        // Arrival Detection
         const distToDestination = getDistance(
           { latitude: userLocation.latitude, longitude: userLocation.longitude },
           { latitude: routingToMosque.latitude, longitude: routingToMosque.longitude }
@@ -390,13 +398,17 @@ export default function MapView({
         if (distToDestination < 20 && lastSpokenStepIndex !== 9999) {
           speak(t("You have arrived at your destination", language), language);
           setLastSpokenStepIndex(9999);
+          setIsSimulating(false);
           setTimeout(() => setIsNavigating(false), 5000);
         }
       }
     } else if (!isNavigating && mapRef.current) {
       mapRef.current.easeTo({ pitch: is3D ? 60 : 0, duration: 1000 });
+      setIsSimulating(false);
     }
-  }, [isNavigating, userLocation, routingToMosque, is3D, navSteps, currentStepIndex, lastSpokenStepIndex]);
+    
+    return () => clearInterval(simulationTimer);
+  }, [isNavigating, userLocation, routingToMosque, is3D, navSteps, currentStepIndex, lastSpokenStepIndex, isSimulating]);
 
   const handleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -418,15 +430,16 @@ export default function MapView({
 
     const fetchMatrix = async () => {
       try {
-        // Sort by straight line distance first to get reasonable candidates
+        // Sort by straight line distance first to get reasonable candidates using Turf
         const sortedByStraight = filteredByCommune
-          .map(m => ({ 
-            ...m, 
-            straightDist: getDistance(
-              { lat: userLocation.latitude, lng: userLocation.longitude },
-              { lat: m.latitude, lng: m.longitude }
-            ) 
-          }))
+          .map(m => {
+            const from = turf.point([userLocation.longitude, userLocation.latitude]);
+            const to = turf.point([m.longitude, m.latitude]);
+            return { 
+              ...m, 
+              straightDist: turf.distance(from, to, { units: 'meters' })
+            };
+          })
           .sort((a, b) => a.straightDist - b.straightDist);
 
         // Check top 50 (two batches of 25)
@@ -531,6 +544,7 @@ export default function MapView({
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
         projection={{ name: 'globe' }}
+        terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
       >
         {/* 1. TOP-LEFT: Qibla & Branding */}
         <div className="absolute top-24 left-4 z-[9999] pointer-events-none">
@@ -611,9 +625,9 @@ export default function MapView({
           </div>
         )}
 
-        {/* 4. BOTTOM-RIGHT: Location FAB */}
-        {!isNavigating && (
-          <div className="absolute bottom-32 right-4 z-[9999]">
+        {/* 4. BOTTOM-RIGHT: Location FAB & Simulation */}
+        <div className="absolute bottom-32 right-4 z-[9999] flex flex-col items-end">
+           {!isNavigating && (
              <button 
                onClick={handleGeolocate}
                className={`w-14 h-14 bg-white/95 backdrop-blur-xl rounded-2xl shadow-huge border border-white/50 flex items-center justify-center text-blue-600 transition-all hover:scale-110 active:scale-90 ring-1 ring-black/5 ${isLocating ? 'shadow-blue-200' : ''}`}
@@ -621,8 +635,20 @@ export default function MapView({
              >
                 <LocateFixed size={24} className={isLocating ? 'animate-pulse' : ''} />
              </button>
-          </div>
-        )}
+           )}
+           
+           {/* Simulation Toggle FAB */}
+           {isNavigating && (
+             <button 
+               onClick={() => setIsSimulating(!isSimulating)}
+               className={`w-14 h-14 rounded-2xl shadow-huge border border-white/50 flex flex-col items-center justify-center transition-all hover:scale-110 active:scale-90 ring-1 ring-black/5 ${isSimulating ? 'bg-amber-500 text-white border-amber-500 shadow-amber-500/20' : 'bg-white/95 backdrop-blur-xl text-amber-600'}`}
+               title={isSimulating ? "Stop Simulation" : "Start Simulation"}
+             >
+                <Compass size={20} className={isSimulating ? 'animate-spin' : ''} />
+                <span className="text-[8px] font-black uppercase mt-0.5">{isSimulating ? "SIM ON" : "SIM"}</span>
+             </button>
+           )}
+        </div>
 
         {/* 5. BOTTOM-LEFT: Layers Hub */}
         {!isNavigating && (
@@ -654,10 +680,11 @@ export default function MapView({
             type="fill-extrusion"
             minzoom={15}
             paint={{
-              'fill-extrusion-color': currentTheme === 'dark' ? '#334155' : '#e2e8f0',
+              'fill-extrusion-color': currentTheme === 'dark' ? '#1e293b' : '#f1f5f9',
               'fill-extrusion-height': ['get', 'height'],
               'fill-extrusion-base': ['get', 'min_height'],
-              'fill-extrusion-opacity': 0.8
+              'fill-extrusion-opacity': 0.9,
+              'fill-extrusion-ambient-occlusion-intensity': 0.5
             }}
           />
         )}
