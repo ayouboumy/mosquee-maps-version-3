@@ -166,11 +166,21 @@ const ManeuverIcon = ({ type, modifier, size = 24 }: { type: string, modifier?: 
 };
 
 function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey }: { start: [number, number], end: [number, number], isMainRoute?: boolean, routeProfile?: string | RouteProfile, routeKey: string, key?: string }) {
-  const [positions, setPositions] = useState<[number, number][]>([start, end]);
+  const [positions, setPositions] = useState<[number, number][]>([]);
   const { setRouteInfo, setNavSteps } = useAppStore();
+  const lastStartRef = useRef<[number, number]>(start);
 
   useEffect(() => {
     if (isNaN(start[0]) || isNaN(start[1]) || isNaN(end[0]) || isNaN(end[1])) return;
+    
+    // Throttling: Only re-fetch if moved more than 20m (for alt routes)
+    if (!isMainRoute) {
+      const distMoved = getDistance(
+        { latitude: lastStartRef.current[1], longitude: lastStartRef.current[0] },
+        { latitude: start[1], longitude: start[0] }
+      );
+      if (distMoved < 20 && positions.length > 0) return;
+    }
     
     let isMounted = true;
     const fetchRoute = async () => {
@@ -180,6 +190,7 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
         
         if (isMounted && data) {
           setPositions(data.geometry.coordinates);
+          lastStartRef.current = start;
           if (isMainRoute) {
             setRouteInfo({ distance: data.distance, duration: data.duration });
             setNavSteps(data.steps);
@@ -192,7 +203,7 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
     };
     fetchRoute();
     return () => { isMounted = false; };
-  }, [start[0], start[1], end[0], end[1], isMainRoute, setRouteInfo, routeProfile, setNavSteps]);
+  }, [start[0], start[1], end[0], end[1], isMainRoute, routeProfile]);
 
   useEffect(() => {
     return () => { if (isMainRoute) setRouteInfo(null); };
@@ -203,7 +214,10 @@ function RouteLine({ start, end, isMainRoute, routeProfile = 'driving', routeKey
     ? (isDriving ? '#3b82f6' : '#10b981') 
     : '#94a3b8';
 
-  const validPositions = positions.filter(p => p && typeof p[0] === 'number' && !isNaN(p[0]) && typeof p[1] === 'number' && !isNaN(p[1]));
+  const validPositions = positions.length >= 2 
+    ? positions.filter(p => p && typeof p[0] === 'number' && !isNaN(p[0]) && typeof p[1] === 'number' && !isNaN(p[1]))
+    : [];
+    
   if (validPositions.length < 2) return null;
 
   const geojson: any = {
@@ -336,84 +350,64 @@ export default function MapView({
 
   // Adaptive 3D Navigation Camera & Geometry Simulation Logic
   const simIndexRef = useRef(0);
-  
   useEffect(() => {
     let simulationTimer: any;
-    const { routeGeometry } = useAppStore.getState();
-    
+    if (isNavigating && isSimulating && routeGeometry.length > 0) {
+      simulationTimer = setInterval(() => {
+        if (simIndexRef.current < routeGeometry.length - 1) {
+          simIndexRef.current++;
+          const nextPos = routeGeometry[simIndexRef.current];
+          setUserLocation({ longitude: nextPos[0], latitude: nextPos[1] });
+        } else {
+          setIsSimulating(false);
+        }
+      }, 150);
+    }
+    return () => clearInterval(simulationTimer);
+  }, [isNavigating, isSimulating, routeGeometry]);
+
+  // 2. Camera & Guidance Effect (Sync)
+  useEffect(() => {
     if (isNavigating && userLocation && routingToMosque && mapRef.current) {
-      // 1. Dynamic Camera Logic (Auto-Zoom & Auto-Pitch)
-      const currentStep = navSteps[currentStepIndex];
-      let targetZoom = 17.5;
-      let targetPitch = 70;
-
-      if (currentStep && currentStep.maneuver) {
-        const distToManeuver = getDistance(
-          { latitude: userLocation.latitude, longitude: userLocation.longitude },
-          { latitude: currentStep.maneuver.location[1], longitude: currentStep.maneuver.location[0] }
-        );
-        
-        // Auto-Zoom: Zoom in when approaching a turn
-        if (distToManeuver < 50) targetZoom = 19;
-        else if (distToManeuver < 150) targetZoom = 18.5;
-      }
-
+      // Camera Logic
       const dy = routingToMosque.latitude - userLocation.latitude;
       const dx = routingToMosque.longitude - userLocation.longitude;
       const angle = Math.atan2(dx, dy) * (180 / Math.PI);
       setNavHeading(angle);
 
+      const step = navSteps[currentStepIndex];
+      let targetZoom = 17.5;
+      if (step?.maneuver) {
+        const dist = getDistance(
+          { latitude: userLocation.latitude, longitude: userLocation.longitude },
+          { latitude: step.maneuver.location[1], longitude: step.maneuver.location[0] }
+        );
+        if (dist < 50) targetZoom = 19;
+        else if (dist < 150) targetZoom = 18.5;
+      }
+
       mapRef.current.easeTo({
         center: [userLocation.longitude, userLocation.latitude],
         zoom: targetZoom,
-        pitch: targetPitch,
+        pitch: 70,
         bearing: angle,
-        duration: isSimulating ? 200 : 1000, // Faster updates during simulation
+        duration: isSimulating ? 200 : 1000,
         essential: true
       });
 
-      // 2. High-Fidelity Geometry Simulation Mode
-      if (isSimulating && routeGeometry.length > 0) {
-        simulationTimer = setInterval(() => {
-          if (simIndexRef.current < routeGeometry.length - 1) {
-            simIndexRef.current++;
-            const nextPos = routeGeometry[simIndexRef.current];
-            setUserLocation({ 
-              longitude: nextPos[0], 
-              latitude: nextPos[1] 
-            });
-            
-            // Sync with nav steps if we passed a maneuver point
-            const currentPos = { latitude: nextPos[1], longitude: nextPos[0] };
-            const nextStep = navSteps[currentStepIndex];
-            if (nextStep && nextStep.maneuver) {
-               const dist = getDistance(currentPos, { latitude: nextStep.maneuver.location[1], longitude: nextStep.maneuver.location[0] });
-               if (dist < 10 && currentStepIndex < navSteps.length - 1) {
-                 setCurrentStepIndex(currentStepIndex + 1);
-               }
-            }
-          } else {
-            setIsSimulating(false);
-            clearInterval(simulationTimer);
-          }
-        }, 150); // Fast interval for geometry-following smoothness
-      }
-
-      // 3. Step-by-Step Guidance Logic (Voice)
+      // Step/Voice Logic
       if (navSteps.length > 0) {
-        const step = navSteps[currentStepIndex];
-        if (step && step.maneuver) {
-          const distToCurrent = getDistance(
+        const currentStep = navSteps[currentStepIndex];
+        if (currentStep?.maneuver) {
+          const distToManeuver = getDistance(
             { latitude: userLocation.latitude, longitude: userLocation.longitude },
-            { latitude: step.maneuver.location[1], longitude: step.maneuver.location[0] }
+            { latitude: currentStep.maneuver.location[1], longitude: currentStep.maneuver.location[0] }
           );
-
-          if (distToCurrent < 20 && currentStepIndex < navSteps.length - 1) {
+          if (distToManeuver < 20 && currentStepIndex < navSteps.length - 1) {
             setCurrentStepIndex(currentStepIndex + 1);
           }
-
-          if (distToCurrent < 100 && lastSpokenStepIndex !== currentStepIndex) {
-            speak(step.maneuver.instruction, language);
+          if (distToManeuver < 100 && lastSpokenStepIndex !== currentStepIndex) {
+            speak(currentStep.maneuver.instruction, language);
             setLastSpokenStepIndex(currentStepIndex);
           }
         }
@@ -434,9 +428,7 @@ export default function MapView({
       setIsSimulating(false);
       simIndexRef.current = 0;
     }
-    
-    return () => clearInterval(simulationTimer);
-  }, [isNavigating, userLocation, routingToMosque, is3D, navSteps, routeGeometry, currentStepIndex, lastSpokenStepIndex, isSimulating]);
+  }, [isNavigating, userLocation?.latitude, userLocation?.longitude, routingToMosque, is3D, navSteps, currentStepIndex]);
 
   const handleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -454,7 +446,7 @@ export default function MapView({
   }, [mosques, selectedCommune]);
 
   useEffect(() => {
-    if (!isUserLocationValid || filteredByCommune.length === 0 || !showNearest) return;
+    if (!isUserLocationValid || filteredByCommune.length === 0 || !showNearest || isNavigating) return;
 
     const fetchMatrix = async () => {
       try {
@@ -526,7 +518,7 @@ export default function MapView({
     };
 
     fetchMatrix();
-  }, [userLocation, filteredByCommune, routeProfile, showNearest]);
+  }, [userLocation?.latitude, userLocation?.longitude, filteredByCommune, routeProfile, showNearest, isNavigating]);
 
   const nearestMosques = useMemo(() => {
     if (!showNearest) return [];
@@ -650,15 +642,34 @@ export default function MapView({
         {!isNavigating && (
           <div className="absolute top-24 right-4 z-[9999] flex flex-col gap-2">
              <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-1 flex flex-col gap-1 ring-1 ring-black/5">
-                <button onClick={() => handleZoom(1)} className="p-3 hover:bg-gray-100 rounded-xl transition-colors text-gray-700" title={t("Zoom In", language)}><Plus size={20} strokeWidth={3} /></button>
+                <button 
+                  onClick={() => handleZoom(1)} 
+                  className="p-3 hover:bg-gray-100 rounded-xl transition-colors text-gray-700" 
+                  title={t("Zoom In", language)}
+                >
+                  <Plus size={20} strokeWidth={3} />
+                </button>
                 <div className="h-px bg-gray-100 mx-2" />
-                <button onClick={() => handleZoom(-1)} className="p-3 hover:bg-gray-100 rounded-xl transition-colors text-gray-700" title={t("Zoom Out", language)}><Minus size={20} strokeWidth={3} /></button>
+                <button 
+                  onClick={() => handleZoom(-1)} 
+                  className="p-3 hover:bg-gray-100 rounded-xl transition-colors text-gray-700" 
+                  title={t("Zoom Out", language)}
+                >
+                  <Minus size={20} strokeWidth={3} />
+                </button>
              </div>
              
              {/* Functional Reset North */}
-             <button onClick={() => mapRef.current?.easeTo({ bearing: 0, duration: 800 })} className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 text-emerald-600 ring-1 ring-black/5 hover:bg-gray-50 transition-colors" title={t("Reset North", language)}>
-                <Compass size={20} />
-             </button>
+              <button 
+                onClick={() => {
+                  const map = mapRef.current?.getMap();
+                  if (map) map.easeTo({ bearing: 0, duration: 1000 });
+                }} 
+                className="p-3 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 text-emerald-600 ring-1 ring-black/5 hover:bg-gray-50 transition-colors pointer-events-auto" 
+                title={t("Reset North", language)}
+              >
+                 <Compass size={20} />
+              </button>
 
              {/* Functional Near Mosque Toggle (RESTORED) */}
              <button 
